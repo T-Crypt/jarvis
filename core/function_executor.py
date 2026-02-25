@@ -120,6 +120,24 @@ class FunctionExecutor:
                 return self._get_system_info()
             elif func_name == "control_rgb_lighting":
                 return self._control_rgb_lighting(params)
+            # ── RGB low-level API functions ──────────────────────────────────
+            # BUG FIX: these were missing — all 8 fell through to "Unknown function"
+            elif func_name == "check_signalrgb_connection":
+                return self._check_signalrgb_connection()
+            elif func_name == "get_current_rgb_effect":
+                return self._get_current_rgb_effect()
+            elif func_name == "set_rgb_brightness":
+                return self._set_rgb_brightness(params)
+            elif func_name == "enable_rgb_canvas":
+                return self._enable_rgb_canvas(params)
+            elif func_name == "get_installed_rgb_effects":
+                return self._get_installed_rgb_effects()
+            elif func_name == "get_rgb_effect_info":
+                return self._get_rgb_effect_info(params)
+            elif func_name == "apply_rgb_effect":
+                return self._apply_rgb_effect(params)
+            elif func_name == "get_rgb_effect_presets":
+                return self._get_rgb_effect_presets(params)
             else:
                 return {"success": False, "message": f"Unknown function: {func_name}", "data": None}
         except Exception as e:
@@ -653,6 +671,119 @@ class FunctionExecutor:
 
         else:
             return {"success": False, "message": f"Unknown action: {action}", "data": None}
+
+    # ── RGB low-level API methods ────────────────────────────────────────────
+
+    def _check_signalrgb_connection(self) -> Dict:
+        """Check if SignalRGB API is reachable."""
+        if not hasattr(self, 'signalrgb_client') or not self.signalrgb_client:
+            return {"success": False, "message": "SignalRGB client not available", "data": None}
+        connected = self.signalrgb_client.check_connection()
+        if connected:
+            return {"success": True, "message": "SignalRGB is connected and available", "data": {"connected": True}}
+        return {"success": False, "message": "SignalRGB API is not reachable. Make sure SignalRGB is running.", "data": {"connected": False}}
+
+    def _get_current_rgb_effect(self) -> Dict:
+        """Get the currently active RGB effect."""
+        if not hasattr(self, 'signalrgb_client') or not self.signalrgb_client:
+            return {"success": False, "message": "SignalRGB client not available", "data": None}
+        if not self.signalrgb_client.available:
+            self.signalrgb_client.check_connection()
+        effect = self.signalrgb_client.get_current_effect()
+        if effect is not None:
+            name = effect.get("name") or effect.get("id") or "Unknown"
+            return {"success": True, "message": f"Current RGB effect: {name}", "data": effect}
+        return {"success": False, "message": "Could not retrieve current effect", "data": None}
+
+    def _set_rgb_brightness(self, params: Dict) -> Dict:
+        """Set global RGB brightness (0-100)."""
+        if not hasattr(self, 'signalrgb_client') or not self.signalrgb_client:
+            return {"success": False, "message": "SignalRGB client not available", "data": None}
+        brightness = params.get("brightness")
+        if brightness is None:
+            return {"success": False, "message": "Brightness value required", "data": None}
+        if not self.signalrgb_client.available:
+            self.signalrgb_client.check_connection()
+        success = self.signalrgb_client.set_global_brightness(int(brightness))
+        if success:
+            return {"success": True, "message": f"RGB brightness set to {brightness}%", "data": {"brightness": brightness}}
+        return {"success": False, "message": "Failed to set RGB brightness", "data": None}
+
+    def _enable_rgb_canvas(self, params: Dict) -> Dict:
+        """Enable or disable the RGB canvas."""
+        if not hasattr(self, 'signalrgb_client') or not self.signalrgb_client:
+            return {"success": False, "message": "SignalRGB client not available", "data": None}
+        enabled = params.get("enabled", True)
+        if not self.signalrgb_client.available:
+            self.signalrgb_client.check_connection()
+        success = self.signalrgb_client.enable_canvas(bool(enabled))
+        state = "enabled" if enabled else "disabled"
+        if success:
+            return {"success": True, "message": f"RGB canvas {state}", "data": {"enabled": enabled}}
+        return {"success": False, "message": f"Failed to {state} RGB canvas", "data": None}
+
+    def _get_installed_rgb_effects(self) -> Dict:
+        """Get list of all installed RGB effects."""
+        if not hasattr(self, 'signalrgb_client') or not self.signalrgb_client:
+            return {"success": False, "message": "SignalRGB client not available", "data": None}
+        if not self.signalrgb_client.available:
+            self.signalrgb_client.check_connection()
+        effects = self.signalrgb_client.get_installed_effects()
+        if effects is not None:
+            names = [e.get("attributes", {}).get("name") or e.get("id", "?") for e in effects[:10]]
+            return {
+                "success": True,
+                "message": f"Found {len(effects)} installed effects",
+                "data": {"effects": effects, "names": names}
+            }
+        return {"success": False, "message": "Could not retrieve installed effects", "data": None}
+
+    def _get_rgb_effect_info(self, params: Dict) -> Dict:
+        """Get detailed info about a specific effect."""
+        if not hasattr(self, 'signalrgb_client') or not self.signalrgb_client:
+            return {"success": False, "message": "SignalRGB client not available", "data": None}
+        effect_id = params.get("effect_id", "")
+        if not effect_id:
+            return {"success": False, "message": "effect_id is required", "data": None}
+        if not self.signalrgb_client.available:
+            self.signalrgb_client.check_connection()
+        info = self.signalrgb_client.get_effect_info(effect_id)
+        if info is not None:
+            name = info.get("attributes", {}).get("name") or effect_id
+            return {"success": True, "message": f"Effect info for '{name}'", "data": info}
+        return {"success": False, "message": f"Effect '{effect_id}' not found", "data": None}
+
+    def _apply_rgb_effect(self, params: Dict) -> Dict:
+        """Apply a specific RGB effect by ID."""
+        if not hasattr(self, 'signalrgb_client') or not self.signalrgb_client:
+            return {"success": False, "message": "SignalRGB client not available", "data": None}
+        effect_id = params.get("effect_id", "")
+        if not effect_id:
+            return {"success": False, "message": "effect_id is required", "data": None}
+        if not self.signalrgb_client.available:
+            self.signalrgb_client.check_connection()
+        success = self.signalrgb_client.apply_effect(effect_id)
+        if success:
+            return {"success": True, "message": f"Applied RGB effect: {effect_id}", "data": {"effect_id": effect_id}}
+        return {"success": False, "message": f"Failed to apply effect '{effect_id}'", "data": None}
+
+    def _get_rgb_effect_presets(self, params: Dict) -> Dict:
+        """Get available presets for a specific effect."""
+        if not hasattr(self, 'signalrgb_client') or not self.signalrgb_client:
+            return {"success": False, "message": "SignalRGB client not available", "data": None}
+        effect_id = params.get("effect_id", "")
+        if not effect_id:
+            return {"success": False, "message": "effect_id is required", "data": None}
+        if not self.signalrgb_client.available:
+            self.signalrgb_client.check_connection()
+        presets = self.signalrgb_client.get_effect_presets(effect_id)
+        if presets is not None:
+            return {
+                "success": True,
+                "message": f"Found {len(presets)} presets for '{effect_id}'",
+                "data": {"effect_id": effect_id, "presets": presets}
+            }
+        return {"success": False, "message": f"No presets found for '{effect_id}'", "data": None}
 
 
 # Global instance

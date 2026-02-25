@@ -1,15 +1,12 @@
 ---
 base_model: google/functiongemma-270m-it
-library_name: peft
+library_name: transformers
 model_name: functiongemma-270m-ft
 tags:
-- base_model:adapter:google/functiongemma-270m-it
-- lora
-- sft
-- transformers
+- generated_from_trainer
 - trl
+- sft
 licence: license
-pipeline_tag: text-generation
 ---
 
 # Model Card for functiongemma-270m-ft
@@ -37,7 +34,6 @@ This model was trained with SFT.
 
 ### Framework versions
 
-- PEFT 0.18.1
 - TRL: 0.28.0
 - Transformers: 5.2.0
 - Pytorch: 2.6.0+cu124

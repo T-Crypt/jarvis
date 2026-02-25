@@ -607,38 +607,6 @@ nonthinking_examples = [
 # ============ CONTROL_RGB_LIGHTING (50 examples) ============
 # High-level dispatcher: routes to brightness, canvas, or effect actions.
 control_rgb_examples = [
-    # Brightness control (20 examples)
-    ("Set RGB brightness to 75", {"action": "set_brightness", "brightness": 75}),
-    ("Make the RGB lights brighter", {"action": "set_brightness", "brightness": 85}),
-    ("Dim RGB lighting to 30%", {"action": "set_brightness", "brightness": 30}),
-    ("Set RGB brightness to full", {"action": "set_brightness", "brightness": 100}),
-    ("Lower RGB brightness to 20", {"action": "set_brightness", "brightness": 20}),
-    ("Set RGB lights to half brightness", {"action": "set_brightness", "brightness": 50}),
-    ("Make RGB lighting very dim", {"action": "set_brightness", "brightness": 10}),
-    ("Increase RGB brightness to 90", {"action": "set_brightness", "brightness": 90}),
-    ("Set RGB to medium brightness", {"action": "set_brightness", "brightness": 60}),
-    ("Brighten RGB lights to 70%", {"action": "set_brightness", "brightness": 70}),
-    ("Set RGB brightness to 45", {"action": "set_brightness", "brightness": 45}),
-    ("Dim RGB lights to 15%", {"action": "set_brightness", "brightness": 15}),
-    ("Set RGB lighting to 80%", {"action": "set_brightness", "brightness": 80}),
-    ("Make RGB lights slightly brighter", {"action": "set_brightness", "brightness": 65}),
-    ("Set RGB brightness to 35", {"action": "set_brightness", "brightness": 35}),
-    ("Increase RGB light intensity to max", {"action": "set_brightness", "brightness": 100}),
-    ("Set RGB to 25% brightness", {"action": "set_brightness", "brightness": 25}),
-    ("Brighten RGB to 95%", {"action": "set_brightness", "brightness": 95}),
-    ("Dim RGB lighting down to 40", {"action": "set_brightness", "brightness": 40}),
-    ("Set RGB brightness level to 55", {"action": "set_brightness", "brightness": 55}),
-    # Canvas enable/disable (10 examples)
-    ("Enable RGB canvas", {"action": "enable_canvas"}),
-    ("Turn on RGB lighting canvas", {"action": "enable_canvas"}),
-    ("Activate RGB canvas mode", {"action": "enable_canvas"}),
-    ("Enable the RGB lighting canvas", {"action": "enable_canvas"}),
-    ("Start RGB canvas", {"action": "enable_canvas"}),
-    ("Disable RGB canvas", {"action": "disable_canvas"}),
-    ("Turn off RGB lighting canvas", {"action": "disable_canvas"}),
-    ("Deactivate RGB canvas mode", {"action": "disable_canvas"}),
-    ("Disable the RGB lighting canvas", {"action": "disable_canvas"}),
-    ("Stop RGB canvas", {"action": "disable_canvas"}),
     # Effect application (20 examples)
     ("Apply Rainbow effect to RGB lighting", {"action": "apply_effect", "effect_name": "Rainbow"}),
     ("Set RGB to Breathing effect", {"action": "apply_effect", "effect_name": "Breathing"}),
