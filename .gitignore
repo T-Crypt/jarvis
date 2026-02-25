@@ -3,7 +3,7 @@ chat_history.db
 *.log
 import_error.txt
 training_dataset*.jsonl
-_pycache_
+__pycache__
 
 # macOS
 .DS_Store
