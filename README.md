@@ -17,12 +17,13 @@
 | 🎤 **Voice Control** | Wake word detection ("Jarvis") with natural language commands |
 | 💬 **AI Chat** | Interactive chat with local LLMs via Ollama with streaming responses |
 | 🏠 **Smart Home** | Control TP-Link Kasa smart lights and plugs from the app |
-| 💡 **RGB Lighting** | Control PC RGB lighting via SignalRGB integration |
+| 💡 **RGB Lighting** | Control PC RGB lighting via SignalRGB integration (effects, brightness, canvas) |
 | 📅 **Planner** | Manage calendar events, alarms, and timers |
 | 📰 **Daily Briefing** | AI-curated news from Technology, Science, and Top Stories |
 | 🌤️ **Weather** | Current weather and hourly forecast on your dashboard |
 | 🔍 **Web Search** | Search the web through voice or chat commands |
 | 🖥️ **System Monitor** | Real-time CPU and memory usage in the title bar |
+| 📊 **Live Training Data** | Monitor FunctionGemma fine-tuning metrics with TensorBoard |
 
 ---
 
@@ -127,13 +128,23 @@ python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
 
 > 💡 **CPU-only users**: Skip this step—PyTorch will use CPU by default. It's slower but works fine.
 
-### Step 6: Run the Application
+### Step 6: Launch TensorBoard (Optional for Training)
+
+Monitor FunctionGemma fine-tuning:
+
+```bash
+tensorboard --logdir runs
+```
+
+Open http://localhost:6006 in a browser.
+
+### Step 7: Run the Application
 
 ```bash
 python main.py
 ```
 
-🎉 **That's it!** A.D.A will launch with a beautiful GUI.
+🎉 A.D.A will launch with GUI, RGB integration, and all features.
 
 ---
 
@@ -331,6 +342,7 @@ pocket_ai/
 ## 🏠 Smart Home Integration
 
 A.D.A supports **TP-Link Kasa** smart devices:
+A.D.A supports **SignalRGB**: full PC RGB control (brightness, effects, canvas)
 
 ### Supported Devices
 
@@ -352,6 +364,7 @@ A.D.A supports **TP-Link Kasa** smart devices:
 "Set the bedroom lights to 50%"
 "Turn off all lights"
 "Change the office light to blue"
+"Apply Rainbow effect to PC RGB"
 ```
 
 ---
@@ -439,6 +452,12 @@ This project is open source. See [LICENSE](LICENSE) for details.
 - [RealTimeSTT](https://github.com/KoljaB/RealtimeSTT) - Speech recognition
 
 ---
+
+## Gemma Training with RGB Feedback
+
+```bash
+python train_function_gemma.py --live-rgb
+```
 
 <p align="center">
   Made with ❤️ for local AI enthusiasts
