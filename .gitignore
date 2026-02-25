@@ -3,15 +3,26 @@ chat_history.db
 *.log
 import_error.txt
 training_dataset*.jsonl
+_pycache_
 
 # macOS
 .DS_Store
 
 # Large model artifacts (document download instructions instead)
 merged_model/
+functiongemma-270m-ft
 
 # Dev scratch scripts (move to tests/ if worth keeping)
 debug_router.py
 verify_unload.py
 check_icons.py
 speed_test.py
+
+# Python environment
+env/
+venv/
+*.egg-info/
+
+# VSCode / IDE files
+.vscode/
+.idea/
