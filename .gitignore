@@ -1,10 +1,17 @@
-logs/
-functiongemma-finetuned/
-functiongemma-lora/
-functiongemma-merged/
-merged_model_adapter/
-functiongemma-270m-ft/
-merged_model/
-__pycache__/
+# Generated / runtime files
 chat_history.db
-realtimesst.log
+*.log
+import_error.txt
+training_dataset*.jsonl
+
+# macOS
+.DS_Store
+
+# Large model artifacts (document download instructions instead)
+merged_model/
+
+# Dev scratch scripts (move to tests/ if worth keeping)
+debug_router.py
+verify_unload.py
+check_icons.py
+speed_test.py

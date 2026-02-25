@@ -3,16 +3,16 @@ Centralized configuration for Pocket AI.
 """
 
 # --- Model Configuration ---
-RESPONDER_MODEL = "qwen3:1.7b"
+RESPONDER_MODEL = "qwen3:8b"
 OLLAMA_URL = "http://localhost:11434/api"
 LOCAL_ROUTER_PATH = "./merged_model"
 HF_ROUTER_REPO = "nlouis/pocket-ai-router"  # Hugging Face repo for auto-download
 MAX_HISTORY = 20
 
 # --- TTS Configuration ---
-TTS_VOICE_MODEL = "en_GB-northern_english_male-medium"
-TTS_MODEL_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/northern_english_male/medium/en_GB-northern_english_male-medium.onnx"
-TTS_CONFIG_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/northern_english_male/medium/en_GB-northern_english_male-medium.onnx.json"
+TTS_VOICE_MODEL = "en_US-ryan-high"
+TTS_MODEL_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/high/en_US-ryan-high.onnx"
+TTS_CONFIG_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/high/en_US-ryan-high.onnx.json"
 
 # --- STT Configuration ---
 # Using RealTimeSTT for real-time speech-to-text
@@ -29,6 +29,10 @@ WAKE_WORD_CONFIRMATION_COUNT = 1  # Require multiple detections before triggerin
 STT_SAMPLE_RATE = 16000
 STT_CHUNK_SIZE = 4096
 STT_RECORD_TIMEOUT = 5.0  # Maximum seconds to record after wake word
+
+# --- SignalRGB Configuration ---
+SIGNALRGB_ENABLED = True
+SIGNALRGB_BASE_URL = "http://localhost:16038"
 
 # --- Voice Assistant Configuration ---
 VOICE_ASSISTANT_ENABLED = True
@@ -114,6 +118,98 @@ FUNCTIONS = [
                     "filter": {"type": "string", "description": "Optional filter like meetings or appointments"}
                 },
                 "required": ["date"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "control_light",
+            "description": "Controls smart lights - turn on, off, or dim lights in a room",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "description": "The action to perform: on, off, or dim"},
+                    "room": {"type": "string", "description": "The room name where the light is located"}
+                },
+                "required": ["action", "room"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": "Searches the web for information using Google",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "The search query string"}
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_timer",
+            "description": "Sets a countdown timer for a specified duration",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "duration": {"type": "string", "description": "Time duration like 5 minutes or 1 hour"},
+                    "label": {"type": "string", "description": "Optional timer name or label"}
+                },
+                "required": ["duration"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_calendar_event",
+            "description": "Creates a new calendar event or appointment",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "The event title"},
+                    "date": {"type": "string", "description": "The date of the event"},
+                    "time": {"type": "string", "description": "The time of the event"},
+                    "description": {"type": "string", "description": "Optional event details"}
+                },
+                "required": ["title", "date"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_calendar",
+            "description": "Reads and retrieves calendar events for a date or time range",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "date": {"type": "string", "description": "The date or date range to check"},
+                    "filter": {"type": "string", "description": "Optional filter like meetings or appointments"}
+                },
+                "required": ["date"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "control_rgb_lighting",
+            "description": "Controls PC RGB lighting via SignalRGB - set brightness, enable/disable canvas, or apply effects",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "description": "Action to perform: set_brightness, enable_canvas, disable_canvas, apply_effect"},
+                    "brightness": {"type": "integer", "description": "Brightness level 0-100 (required for set_brightness action)"},
+                    "effect_name": {"type": "string", "description": "Name or ID of effect to apply (required for apply_effect action)"}
+                },
+                "required": ["action"]
             }
         }
     },

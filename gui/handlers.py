@@ -12,7 +12,7 @@ from core.settings_store import settings as app_settings
 from core.function_executor import executor as function_executor
 
 # Functions that are actions (not passthrough)
-ACTION_FUNCTIONS = {"control_light", "set_timer", "set_alarm", "create_calendar_event", "add_task", "web_search"}
+ACTION_FUNCTIONS = {"control_light", "set_timer", "set_alarm", "create_calendar_event", "add_task", "web_search", "control_rgb_lighting"}
 
 
 # DEBUG: Set to True to test streaming without TTS blocking

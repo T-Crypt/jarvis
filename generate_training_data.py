@@ -1,12 +1,29 @@
 """
 Generate training dataset for function calling model.
-Creates 50 examples per function (9 functions = 450 total).
+Creates ~50 examples per function across all functions.
+
+Functions covered:
+  Core:         control_light, set_timer, set_alarm, create_calendar_event,
+                add_task, web_search, get_system_info
+  Routing:      thinking, nonthinking
+  RGB (high):   control_rgb_lighting
+  RGB (low):    check_signalrgb_connection, get_current_rgb_effect,
+                set_rgb_brightness, enable_rgb_canvas,
+                get_installed_rgb_effects, get_rgb_effect_info,
+                apply_rgb_effect, get_rgb_effect_presets
 """
 import json
 import random
 
-# Tool definitions (shared across all examples)
+# ---------------------------------------------------------------------------
+# Tool definitions
+# NOTE: every dict in this list needs THREE closing braces at the end:
+#   }  → closes "parameters"
+#   }  → closes the inner "function" value
+#   }  → closes the outer tool dict
+# ---------------------------------------------------------------------------
 TOOLS = [
+    # ── Core tools ──────────────────────────────────────────────────────────
     {"type": "function", "function": {"name": "control_light", "description": "Control smart lights - turn on, off, dim, or change color", "parameters": {"type": "object", "properties": {"action": {"type": "string"}, "device_name": {"type": "string"}, "brightness": {"type": "integer"}, "color": {"type": "string"}}, "required": ["action"]}}},
     {"type": "function", "function": {"name": "set_timer", "description": "Set a countdown timer", "parameters": {"type": "object", "properties": {"duration": {"type": "string"}, "label": {"type": "string"}}, "required": ["duration"]}}},
     {"type": "function", "function": {"name": "set_alarm", "description": "Set an alarm for a specific time", "parameters": {"type": "object", "properties": {"time": {"type": "string"}, "label": {"type": "string"}}, "required": ["time"]}}},
@@ -14,21 +31,38 @@ TOOLS = [
     {"type": "function", "function": {"name": "add_task", "description": "Add a task to the to-do list", "parameters": {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": "string"}}, "required": ["text"]}}},
     {"type": "function", "function": {"name": "web_search", "description": "Search the web for information", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
     {"type": "function", "function": {"name": "get_system_info", "description": "Get current system state including timers, calendar, tasks, devices, and weather", "parameters": {"type": "object", "properties": {}}}},
-    {"type": "function", "function": {"name": "thinking", "description": "Use for complex queries requiring reasoning, math, coding, or multi-step analysis", "parameters": {"type": "object", "properties": {"prompt": {"type": "string"}}, "required": ["prompt"]}}},
-    {"type": "function", "function": {"name": "nonthinking", "description": "Use for simple queries, greetings, factual questions not requiring deep reasoning", "parameters": {"type": "object", "properties": {"prompt": {"type": "string"}}, "required": ["prompt"]}}}
+
+    # ── Thinking / routing tools ─────────────────────────────────────────────
+    {"type": "function", "function": {"name": "thinking", "description": "Use for complex queries requiring multi-step reasoning, math, coding, debugging, detailed analysis, or long-form writing", "parameters": {"type": "object", "properties": {"prompt": {"type": "string"}}, "required": ["prompt"]}}},
+    {"type": "function", "function": {"name": "nonthinking", "description": "Use for simple queries: greetings, single-fact questions, short acknowledgements, or any request not requiring deep reasoning", "parameters": {"type": "object", "properties": {"prompt": {"type": "string"}}, "required": ["prompt"]}}},
+
+    # ── RGB high-level control ────────────────────────────────────────────────
+    {"type": "function", "function": {"name": "control_rgb_lighting", "description": "Control PC RGB lighting via SignalRGB - set brightness, enable/disable canvas, or apply effects", "parameters": {"type": "object", "properties": {"action": {"type": "string"}, "brightness": {"type": "integer"}, "effect_name": {"type": "string"}}, "required": ["action"]}}},
+
+    # ── RGB low-level API tools ───────────────────────────────────────────────
+    {"type": "function", "function": {"name": "check_signalrgb_connection", "description": "Check if SignalRGB API is available for RGB lighting control", "parameters": {"type": "object", "properties": {}}}},
+    {"type": "function", "function": {"name": "get_current_rgb_effect", "description": "Get the currently active RGB lighting effect", "parameters": {"type": "object", "properties": {}}}},
+    {"type": "function", "function": {"name": "set_rgb_brightness", "description": "Set the global RGB lighting brightness level (0-100)", "parameters": {"type": "object", "properties": {"brightness": {"type": "integer"}}, "required": ["brightness"]}}},
+    {"type": "function", "function": {"name": "enable_rgb_canvas", "description": "Enable or disable the RGB lighting canvas", "parameters": {"type": "object", "properties": {"enabled": {"type": "boolean"}}, "required": ["enabled"]}}},
+    {"type": "function", "function": {"name": "get_installed_rgb_effects", "description": "Get list of all installed RGB lighting effects", "parameters": {"type": "object", "properties": {}}}},
+    {"type": "function", "function": {"name": "get_rgb_effect_info", "description": "Get detailed information about a specific RGB effect", "parameters": {"type": "object", "properties": {"effect_id": {"type": "string"}}, "required": ["effect_id"]}}},
+    {"type": "function", "function": {"name": "apply_rgb_effect", "description": "Apply a specific RGB lighting effect by ID", "parameters": {"type": "object", "properties": {"effect_id": {"type": "string"}}, "required": ["effect_id"]}}},
+    {"type": "function", "function": {"name": "get_rgb_effect_presets", "description": "Get available presets for a specific RGB effect", "parameters": {"type": "object", "properties": {"effect_id": {"type": "string"}}, "required": ["effect_id"]}}},
 ]
 
 SYSTEM_MSG = "You are a model that can do function calling with the following functions"
+
 
 def make_example(user_content, func_name, args):
     return {
         "messages": [
             {"role": "developer", "content": SYSTEM_MSG},
             {"role": "user", "content": user_content},
-            {"role": "assistant", "tool_calls": [{"type": "function", "function": {"name": func_name, "arguments": args}}]}
+            {"role": "assistant", "tool_calls": [{"type": "function", "function": {"name": func_name, "arguments": args}}]},
         ],
-        "tools": TOOLS
+        "tools": TOOLS,
     }
+
 
 # ============ CONTROL_LIGHT (50 examples) ============
 control_light_examples = [
@@ -186,56 +220,6 @@ set_timer_examples = [
     ("Set charging timer 1 hour", {"duration": "1 hour", "label": "charging"}),
     ("Baby bottle timer 3 minutes", {"duration": "3 minutes", "label": "bottle"}),
     ("Start 14 minute timer", {"duration": "14 minutes"}),
-    ("Set a 5 minute timer", {"duration": "5 minutes"}),
-    ("Timer 40 minutes for laundry", {"duration": "40 minutes", "label": "laundry"}),
-    ("Start a timer for one hour", {"duration": "1 hour"}),
-    ("15 minute timer please", {"duration": "15 minutes"}),
-    ("Set timer for 2 minutes brushing teeth", {"duration": "2 minutes", "label": "brushing teeth"}),
-    ("Countdown 10 seconds", {"duration": "10 seconds"}),
-    ("Set a timer for 3 and a half minutes", {"duration": "3 minutes 30 seconds"}),
-    ("Timer for 50 minutes exam", {"duration": "50 minutes", "label": "exam"}),
-    ("Start 4 hour timer", {"duration": "4 hours"}),
-    ("Set 55 second timer", {"duration": "55 seconds"}),
-    ("Timer 25 minutes for work block", {"duration": "25 minutes", "label": "work block"}),
-    ("Create a 7 minute timer", {"duration": "7 minutes"}),
-    ("Set timer 12 minutes for pasta", {"duration": "12 minutes", "label": "pasta"}),
-    ("Timer for 1 minute plank", {"duration": "1 minute", "label": "plank"}),
-    ("Start 30 minute timer", {"duration": "30 minutes"}),
-    ("Set a timer for 90 seconds", {"duration": "90 seconds"}),
-    ("Timer 20 minutes power nap", {"duration": "20 minutes", "label": "power nap"}),
-    ("Set timer 45 minutes for decoding", {"duration": "45 minutes", "label": "decoding"}),
-    ("Timer for 8 minutes eggs", {"duration": "8 minutes", "label": "eggs"}),
-    ("Start 5 hour timer", {"duration": "5 hours"}),
-    ("Set 10 second timer", {"duration": "10 seconds"}),
-    ("Timer 15 minutes break", {"duration": "15 minutes", "label": "break"}),
-    ("Set a timer for 2.5 minutes", {"duration": "2 minutes 30 seconds"}),
-    ("Timer for 35 minutes jogging", {"duration": "35 minutes", "label": "jogging"}),
-    ("Start 6 minute timer", {"duration": "6 minutes"}),
-    ("Set timer 18 minutes", {"duration": "18 minutes"}),
-    ("Timer 4 minutes coffee", {"duration": "4 minutes", "label": "coffee"}),
-    ("Set a timer for half an hour", {"duration": "30 minutes"}),
-    ("Timer for 1 hour 15 minutes", {"duration": "1 hour 15 minutes"}),
-    ("Start 45 second timer", {"duration": "45 seconds"}),
-    ("Set timer 9 minutes", {"duration": "9 minutes"}),
-    ("Timer 3 minutes steeping", {"duration": "3 minutes", "label": "steeping"}),
-    ("Set a timer for 12 hours", {"duration": "12 hours"}),
-    ("Timer for 5 minutes meditation", {"duration": "5 minutes", "label": "meditation"}),
-    ("Start 33 minute timer", {"duration": "33 minutes"}),
-    ("Set timer 22 minutes", {"duration": "22 minutes"}),
-    ("Timer for 10 minutes reading", {"duration": "10 minutes", "label": "reading"}),
-    ("Set a timer for 5 hours", {"duration": "5 hours"}),
-    ("Timer 25 minutes cleaning", {"duration": "25 minutes", "label": "cleaning"}),
-    ("Start 1 minute timer", {"duration": "1 minute"}),
-    ("Set timer 16 minutes", {"duration": "16 minutes"}),
-    ("Timer for 60 seconds", {"duration": "60 seconds"}),
-    ("Set a timer for 2 hours", {"duration": "2 hours"}),
-    ("Timer 28 minutes podcast", {"duration": "28 minutes", "label": "podcast"}),
-    ("Start 8 minute timer", {"duration": "8 minutes"}),
-    ("Set timer 30 seconds stretch", {"duration": "30 seconds", "label": "stretch"}),
-    ("Timer for 7 minutes yoga", {"duration": "7 minutes", "label": "yoga"}),
-    ("Set a timer for 10 hours", {"duration": "10 hours"}),
-    ("Timer 11 minutes", {"duration": "11 minutes"}),
-    ("Start 2 minute timer", {"duration": "2 minutes"}),
 ]
 
 # ============ SET_ALARM (50 examples) ============
@@ -290,56 +274,6 @@ set_alarm_examples = [
     ("Set 6:55 alarm", {"time": "6:55am"}),
     ("Wake me up at eight", {"time": "8am"}),
     ("Alarm 7:10am", {"time": "7:10am"}),
-    ("Set alarm for 5:30 tomorrow", {"time": "5:30am", "date": "tomorrow"}),
-    ("Wake me up at 9 on Saturday", {"time": "9am", "date": "Saturday"}),
-    ("Alarm 8:45pm", {"time": "8:45pm"}),
-    ("Set a reminder alarm for 10am", {"time": "10am", "label": "reminder"}),
-    ("Wake me at 6:10", {"time": "6:10am"}),
-    ("Alarm for 7:50am", {"time": "7:50am"}),
-    ("Set alarm 11:15am for brunch", {"time": "11:15am", "label": "brunch"}),
-    ("Wake up at 5:05am", {"time": "5:05am"}),
-    ("Alarm 1:30pm", {"time": "1:30pm"}),
-    ("Set alarm for midnight", {"time": "12am"}),
-    ("Wake me up at 7:40", {"time": "7:40am"}),
-    ("Alarm for 6:25am", {"time": "6:25am"}),
-    ("Set pill alarm 9pm", {"time": "9pm", "label": "pills"}),
-    ("Wake me at 8:15", {"time": "8:15am"}),
-    ("Alarm 4:45am", {"time": "4:45am"}),
-    ("Set alarm 2:15pm call", {"time": "2:15pm", "label": "call"}),
-    ("Wake up at 10:30am", {"time": "10:30am"}),
-    ("Alarm for 5:55am", {"time": "5:55am"}),
-    ("Set laundry alarm 3:45pm", {"time": "3:45pm", "label": "laundry"}),
-    ("Wake me up at 6:50", {"time": "6:50am"}),
-    ("Alarm 7:25am", {"time": "7:25am"}),
-    ("Set alarm for 8:50", {"time": "8:50am"}),
-    ("Wake me at 9:30 on Sunday", {"time": "9:30am", "date": "Sunday"}),
-    ("Alarm 12:45pm", {"time": "12:45pm"}),
-    ("Set alarm 3:20am", {"time": "3:20am"}),
-    ("Wake up at 7:12am", {"time": "7:12am"}),
-    ("Alarm for 11:50am", {"time": "11:50am"}),
-    ("Set gym alarm 4:50am", {"time": "4:50am", "label": "gym"}),
-    ("Wake me up at 5:40", {"time": "5:40am"}),
-    ("Alarm 6:05am", {"time": "6:05am"}),
-    ("Set alarm 10:10am", {"time": "10:10am"}),
-    ("Wake me at 8:20", {"time": "8:20am"}),
-    ("Alarm for 3:55pm", {"time": "3:55pm"}),
-    ("Set alarm 7:35am", {"time": "7:35am"}),
-    ("Wake up at 4:25am", {"time": "4:25am"}),
-    ("Alarm 1:50pm", {"time": "1:50pm"}),
-    ("Set alarm 9:05am", {"time": "9:05am"}),
-    ("Wake me up at 6:33", {"time": "6:33am"}),
-    ("Alarm 5:25am", {"time": "5:25am"}),
-    ("Set alarm for 2:45pm", {"time": "2:45pm"}),
-    ("Wake me at 7:45 on Monday", {"time": "7:45am", "date": "Monday"}),
-    ("Alarm 10:45pm", {"time": "10:45pm"}),
-    ("Set alarm 12:15am", {"time": "12:15am"}),
-    ("Wake up at 8:55", {"time": "8:55am"}),
-    ("Alarm for 6:12am", {"time": "6:12am"}),
-    ("Set alarm 4:10pm", {"time": "4:10pm"}),
-    ("Wake me up at 9:10", {"time": "9:10am"}),
-    ("Alarm 5:35am", {"time": "5:35am"}),
-    ("Set alarm 11:05am", {"time": "11:05am"}),
-    ("Wake me at 7:55", {"time": "7:55am"}),
 ]
 
 # ============ CREATE_CALENDAR_EVENT (50 examples) ============
@@ -394,168 +328,60 @@ calendar_examples = [
     ("Schedule tutoring session Monday 4pm", {"title": "tutoring session", "date": "Monday", "time": "4pm"}),
     ("Add potluck dinner Saturday noon", {"title": "potluck dinner", "date": "Saturday", "time": "12pm"}),
     ("Create sprint planning Monday 9:30am", {"title": "sprint planning", "date": "Monday", "time": "9:30am"}),
-    ("Schedule hiking trip Saturday 8am", {"title": "hiking trip", "date": "Saturday", "time": "8am"}),
-    ("Add weekly sync Monday 2pm", {"title": "weekly sync", "date": "Monday", "time": "2pm"}),
-    ("Create dentist appointment for June 10th", {"title": "dentist appointment", "date": "June 10th"}),
-    ("Schedule drinks with friends Friday 8pm", {"title": "drinks with friends", "date": "Friday", "time": "8pm"}),
-    ("Add quarterly review next Friday", {"title": "quarterly review", "date": "next Friday"}),
-    ("Create workshop Tuesday 10am", {"title": "workshop", "date": "Tuesday", "time": "10am"}),
-    ("Schedule family dinner Sunday 5pm", {"title": "family dinner", "date": "Sunday", "time": "5pm"}),
-    ("Add car inspection Wednesday 9am", {"title": "car inspection", "date": "Wednesday", "time": "9am"}),
-    ("Create gym class Thursday 6pm", {"title": "gym class", "date": "Thursday", "time": "6pm"}),
-    ("Schedule marketing meeting Monday 11am", {"title": "marketing meeting", "date": "Monday", "time": "11am"}),
-    ("Add vacation start date July 1st", {"title": "vacation start", "date": "July 1st"}),
-    ("Create coffee chat tomorrow 10:30", {"title": "coffee chat", "date": "tomorrow", "time": "10:30am"}),
-    ("Schedule dog grooming Saturday 11am", {"title": "dog grooming", "date": "Saturday", "time": "11am"}),
-    ("Add budget review Friday 3pm", {"title": "budget review", "date": "Friday", "time": "3pm"}),
-    ("Create town hall meeting Wednesday 1pm", {"title": "town hall", "date": "Wednesday", "time": "1pm"}),
-    ("Schedule tennis match Sunday 9am", {"title": "tennis match", "date": "Sunday", "time": "9am"}),
-    ("Add kids concert Thursday 7pm", {"title": "kids concert", "date": "Thursday", "time": "7pm"}),
-    ("Create planning session Monday 4:30", {"title": "planning session", "date": "Monday", "time": "4:30pm"}),
-    ("Schedule haircut next Tuesday 5pm", {"title": "haircut", "date": "next Tuesday", "time": "5pm"}),
-    ("Add volunteer work Saturday morning", {"title": "volunteer work", "date": "Saturday", "time": "morning"}),
-    ("Create design review Wednesday 2pm", {"title": "design review", "date": "Wednesday", "time": "2pm"}),
-    ("Schedule pickup laundry Friday 5pm", {"title": "pickup laundry", "date": "Friday", "time": "5pm"}),
-    ("Add soccer game Sunday 11am", {"title": "soccer game", "date": "Sunday", "time": "11am"}),
-    ("Create intro call Thursday 11:30", {"title": "intro call", "date": "Thursday", "time": "11:30am"}),
-    ("Schedule brunch next Sunday", {"title": "brunch", "date": "next Sunday"}),
-    ("Add mechanic appointment Monday 8am", {"title": "mechanic appointment", "date": "Monday", "time": "8am"}),
-    ("Create project kickoff Tuesday 10am", {"title": "project kickoff", "date": "Tuesday", "time": "10am"}),
-    ("Schedule yoga Friday 7am", {"title": "yoga", "date": "Friday", "time": "7am"}),
-    ("Add dinner with parents Saturday 6pm", {"title": "dinner with parents", "date": "Saturday", "time": "6pm"}),
-    ("Create status update Wednesday 9:15", {"title": "status update", "date": "Wednesday", "time": "9:15am"}),
-    ("Schedule eye doctor Thursday 4pm", {"title": "eye doctor", "date": "Thursday", "time": "4pm"}),
-    ("Add shopping trip Sunday 1pm", {"title": "shopping trip", "date": "Sunday", "time": "1pm"}),
-    ("Create strategy meeting Monday 3pm", {"title": "strategy meeting", "date": "Monday", "time": "3pm"}),
-    ("Schedule vet appointment Saturday 9:30", {"title": "vet appointment", "date": "Saturday", "time": "9:30am"}),
-    ("Add cooking class Friday 7:30pm", {"title": "cooking class", "date": "Friday", "time": "7:30pm"}),
-    ("Create standup tomorrow 10am", {"title": "standup", "date": "tomorrow", "time": "10am"}),
-    ("Schedule call with accountant Tuesday 11am", {"title": "accountant call", "date": "Tuesday", "time": "11am"}),
-    ("Add birthday dinner next Saturday", {"title": "birthday dinner", "date": "next Saturday"}),
-    ("Create team outing Friday 4pm", {"title": "team outing", "date": "Friday", "time": "4pm"}),
-    ("Schedule house warming Sunday 2pm", {"title": "house warming", "date": "Sunday", "time": "2pm"}),
-    ("Add tax deadline April 15th", {"title": "tax deadline", "date": "April 15th"}),
-    ("Create client presentation Wednesday 10am", {"title": "client presentation", "date": "Wednesday", "time": "10am"}),
-    ("Schedule running club Saturday 7am", {"title": "running club", "date": "Saturday", "time": "7am"}),
-    ("Add movie date Friday 9pm", {"title": "movie date", "date": "Friday", "time": "9pm"}),
-    ("Create code freeze Monday", {"title": "code freeze", "date": "Monday"}),
-    ("Schedule lunch with mentor Tuesday noon", {"title": "lunch with mentor", "date": "Tuesday", "time": "12pm"}),
-    ("Add open house Sunday 11am", {"title": "open house", "date": "Sunday", "time": "11am"}),
-    ("Create baby shower Saturday 1pm", {"title": "baby shower", "date": "Saturday", "time": "1pm"}),
-    ("Schedule interview Thursday 3:30pm", {"title": "interview", "date": "Thursday", "time": "3:30pm"}),
-    ("Add webinar Wednesday 12pm", {"title": "webinar", "date": "Wednesday", "time": "12pm"}),
-    ("Create retreat weekend next Friday", {"title": "retreat weekend", "date": "next Friday"}),
 ]
 
 # ============ ADD_TASK (50 examples) ============
 task_examples = [
-    ('Add buy groceries to my task list', {'text': 'buy groceries'}),
-    ('Add to todo list: call mom', {'text': 'call mom'}),
-    ('Put pay bills on the task list', {'text': 'pay bills'}),
-    ('Add new task: send email', {'text': 'send email'}),
-    ('Add to task list: water plants', {'text': 'water plants'}),
-    ('Create task pick up dry cleaning', {'text': 'pick up dry cleaning'}),
-    ('Add to list: take out trash', {'text': 'take out trash'}),
-    ('Add book flight tickets to my to-do list', {'text': 'book flight tickets'}),
-    ('Add task: schedule dentist', {'text': 'schedule dentist'}),
-    ('Put finish report on my task list', {'text': 'finish report'}),
-    ('Add buy birthday gift to my tasks', {'text': 'buy birthday gift'}),
-    ('Add to todo list: clean the house', {'text': 'clean the house'}),
-    ('Add entry to tasks: water plants', {'text': 'water plants'}),
-    ('Add task do laundry', {'text': 'do laundry'}),
-    ('Put return library books on the list', {'text': 'return library books'}),
-    ('Add renew subscription to task list', {'text': 'renew subscription'}),
-    ('Add new task: fix leaky faucet', {'text': 'fix leaky faucet'}),
-    ('Add to list: order supplies', {'text': 'order supplies'}),
-    ('Create task submit expense report', {'text': 'submit expense report'}),
-    ('Add schedule car maintenance to my to-do list', {'text': 'schedule car maintenance'}),
-    ('Add task: prescription refill', {'text': 'prescription refill'}),
-    ('Put backup computer files on my task list', {'text': 'backup computer files'}),
-    ('Add cancel subscription to my tasks', {'text': 'cancel subscription'}),
-    ('Add to todo list: review contract', {'text': 'review contract'}),
-    ('Add entry to tasks: meal prep', {'text': 'meal prep'}),
-    ('Add task update resume', {'text': 'update resume'}),
-    ('Put organize closet on the list', {'text': 'organize closet'}),
-    ('Add reply to John to task list', {'text': 'reply to John'}),
-    ('Add new task: prepare presentation', {'text': 'prepare presentation'}),
-    ('Add to list: buy new shoes', {'text': 'buy new shoes'}),
-    ('Create task call insurance', {'text': 'call insurance'}),
-    ('Add fix broken chair to my to-do list', {'text': 'fix broken chair'}),
-    ('Add task: research vacation', {'text': 'research vacation'}),
-    ('Put sign permission slip on my task list', {'text': 'sign permission slip'}),
-    ('Add change air filters to my tasks', {'text': 'change air filters'}),
-    ('Add to todo list: change oil', {'text': 'change oil'}),
-    ('Add entry to tasks: buy dog food', {'text': 'buy dog food'}),
-    ('Add task clean garage', {'text': 'clean garage'}),
-    ('Put follow up with client on the list', {'text': 'follow up with client'}),
-    ('Add return Amazon package to task list', {'text': 'return Amazon package'}),
-    ('Add new task: charge batteries', {'text': 'charge batteries'}),
-    ('Add to list: paint bedroom', {'text': 'paint bedroom'}),
-    ('Create task schedule haircut', {'text': 'schedule haircut'}),
-    ('Add write thank you notes to my to-do list', {'text': 'write thank you notes'}),
-    ('Add task: buy new headphones', {'text': 'buy new headphones'}),
-    ('Put water lawn on my task list', {'text': 'water lawn'}),
-    ('Add vacuum the car to my tasks', {'text': 'vacuum the car'}),
-    ('Add to todo list: file taxes', {'text': 'file taxes'}),
-    ('Add entry to tasks: update software', {'text': 'update software'}),
-    ('Add task defrost freezer', {'text': 'defrost freezer'}),
-    ('Put RSVP to party on the list', {'text': 'RSVP to party'}),
-    ('Add buy milk to task list', {'text': 'buy milk'}),
-    ('Add new task: call Steve', {'text': 'call Steve'}),
-    ('Add to list: clean the kitchen', {'text': 'clean the kitchen'}),
-    ('Create task wash the car', {'text': 'wash the car'}),
-    ('Add hiking to my to-do list', {'text': 'hiking'}),
-    ('Add task: submit the report', {'text': 'submit the report'}),
-    ('Put pay the bills on my task list', {'text': 'pay the bills'}),
-    ('Add water plants to my tasks', {'text': 'water plants'}),
-    ('Add to todo list: project review', {'text': 'project review'}),
-    ('Add entry to tasks: buy stamps', {'text': 'buy stamps'}),
-    ('Add task text mom back', {'text': 'text mom back'}),
-    ('Put schedule doctor appt on the list', {'text': 'schedule doctor appt'}),
-    ('Add walk the dog to task list', {'text': 'walk the dog'}),
-    ('Add new task: debug the router', {'text': 'debug the router'}),
-    ('Add to list: read book', {'text': 'read book'}),
-    ('Create task pick up package', {'text': 'pick up package'}),
-    ('Add check email to my to-do list', {'text': 'check email'}),
-    ('Add task: finish laundry', {'text': 'finish laundry'}),
-    ('Put organize desk on my task list', {'text': 'organize desk'}),
-    ('Add write documentation to my tasks', {'text': 'write documentation'}),
-    ('Add to todo list: buy gift for Sarah', {'text': 'buy gift for Sarah'}),
-    ('Add entry to tasks: charge phone', {'text': 'charge phone'}),
-    ('Add task check tires', {'text': 'check tires'}),
-    ('Put plan weekend trip on the list', {'text': 'plan weekend trip'}),
-    ('Add buy coffee beans to task list', {'text': 'buy coffee beans'}),
-    ('Add new task: update software', {'text': 'update software'}),
-    ('Add to list: take vitamins', {'text': 'take vitamins'}),
-    ('Create task pay rent', {'text': 'pay rent'}),
-    ('Add clean bathroom to my to-do list', {'text': 'clean bathroom'}),
-    ('Add task: mail the letter', {'text': 'mail the letter'}),
-    ('Put schedule meeting with team on my task list', {'text': 'schedule meeting with team'}),
-    ('Add defrost chicken to my tasks', {'text': 'defrost chicken'}),
-    ('Add to todo list: backup photos', {'text': 'backup photos'}),
-    ('Add entry to tasks: watch new episode', {'text': 'watch new episode'}),
-    ('Add task order pizza', {'text': 'order pizza'}),
-    ('Put review PRs on the list', {'text': 'review PRs'}),
-    ('Add buy formatting to task list', {'text': 'buy formatting'}),
-    ('Add new task: call the bank', {'text': 'call the bank'}),
-    ('Add to list: prepare dinner', {'text': 'prepare dinner'}),
-    ('Create task sign documents', {'text': 'sign documents'}),
-    ('Add cancel membership to my to-do list', {'text': 'cancel membership'}),
-    ('Add task: clean windows', {'text': 'clean windows'}),
-    ('Put buy toothpaste on my task list', {'text': 'buy toothpaste'}),
-    ('Add check mail to my tasks', {'text': 'check mail'}),
-    ('Add to todo list: empty dishwasher', {'text': 'empty dishwasher'}),
-    ('Add entry to tasks: water the garden', {'text': 'water the garden'}),
-    ('Add task buy batteries', {'text': 'buy batteries'}),
-    ('Put close the garage on the list', {'text': 'close the garage'}),
-    ('Add renew passport to task list', {'text': 'renew passport'}),
-    ('Add new task: send birthday card', {'text': 'send birthday card'}),
-    ('Add to list: fix the fence', {'text': 'fix the fence'}),
-    ('Create task buy apples', {'text': 'buy apples'}),
-    ('Add check flight status to my to-do list', {'text': 'check flight status'}),
-    ('Add task: print tickets', {'text': 'print tickets'}),
-    ('Put call plumber on my task list', {'text': 'call plumber'}),
-    ('Add return the shoes to my tasks', {'text': 'return the shoes'}),
+    ("Add buy groceries to my task list", {"text": "buy groceries"}),
+    ("Add to todo list: call mom", {"text": "call mom"}),
+    ("Put pay bills on the task list", {"text": "pay bills"}),
+    ("Add new task: send email", {"text": "send email"}),
+    ("Add to task list: water plants", {"text": "water plants"}),
+    ("Create task pick up dry cleaning", {"text": "pick up dry cleaning"}),
+    ("Add to list: take out trash", {"text": "take out trash"}),
+    ("Add book flight tickets to my to-do list", {"text": "book flight tickets"}),
+    ("Add task: schedule dentist", {"text": "schedule dentist"}),
+    ("Put finish report on my task list", {"text": "finish report"}),
+    ("Add buy birthday gift to my tasks", {"text": "buy birthday gift"}),
+    ("Add to todo list: clean the house", {"text": "clean the house"}),
+    ("Add entry to tasks: meal prep", {"text": "meal prep"}),
+    ("Add task do laundry", {"text": "do laundry"}),
+    ("Put return library books on the list", {"text": "return library books"}),
+    ("Add renew subscription to task list", {"text": "renew subscription"}),
+    ("Add new task: fix leaky faucet", {"text": "fix leaky faucet"}),
+    ("Add to list: order supplies", {"text": "order supplies"}),
+    ("Create task submit expense report", {"text": "submit expense report"}),
+    ("Add schedule car maintenance to my to-do list", {"text": "schedule car maintenance"}),
+    ("Add task: prescription refill", {"text": "prescription refill"}),
+    ("Put backup computer files on my task list", {"text": "backup computer files"}),
+    ("Add cancel subscription to my tasks", {"text": "cancel subscription"}),
+    ("Add to todo list: review contract", {"text": "review contract"}),
+    ("Add task update resume", {"text": "update resume"}),
+    ("Put organize closet on the list", {"text": "organize closet"}),
+    ("Add reply to John to task list", {"text": "reply to John"}),
+    ("Add new task: prepare presentation", {"text": "prepare presentation"}),
+    ("Add to list: buy new shoes", {"text": "buy new shoes"}),
+    ("Create task call insurance", {"text": "call insurance"}),
+    ("Add fix broken chair to my to-do list", {"text": "fix broken chair"}),
+    ("Add task: research vacation", {"text": "research vacation"}),
+    ("Put sign permission slip on my task list", {"text": "sign permission slip"}),
+    ("Add change air filters to my tasks", {"text": "change air filters"}),
+    ("Add to todo list: change oil", {"text": "change oil"}),
+    ("Add entry to tasks: buy dog food", {"text": "buy dog food"}),
+    ("Add task clean garage", {"text": "clean garage"}),
+    ("Put follow up with client on the list", {"text": "follow up with client"}),
+    ("Add return Amazon package to task list", {"text": "return Amazon package"}),
+    ("Add new task: charge batteries", {"text": "charge batteries"}),
+    ("Add to list: paint bedroom", {"text": "paint bedroom"}),
+    ("Create task schedule haircut", {"text": "schedule haircut"}),
+    ("Add write thank you notes to my to-do list", {"text": "write thank you notes"}),
+    ("Add task: buy new headphones", {"text": "buy new headphones"}),
+    ("Put water lawn on my task list", {"text": "water lawn"}),
+    ("Add vacuum the car to my tasks", {"text": "vacuum the car"}),
+    ("Add to todo list: file taxes", {"text": "file taxes"}),
+    ("Add entry to tasks: update software", {"text": "update software"}),
+    ("Add task defrost freezer", {"text": "defrost freezer"}),
+    ("Put RSVP to party on the list", {"text": "RSVP to party"}),
 ]
 
 # ============ WEB_SEARCH (50 examples) ============
@@ -610,57 +436,6 @@ search_examples = [
     ("Find dry cleaners nearby", {"query": "dry cleaners near me"}),
     ("Search for home improvement ideas", {"query": "home improvement ideas"}),
     ("Look up visa requirements", {"query": "visa requirements for Japan"}),
-    ("Search for cookie recipes", {"query": "cookie recipes"}),
-    ("Find nearby gas stations", {"query": "gas stations near me"}),
-    ("Look up population of China", {"query": "population of China"}),
-    ("Search how to play chess", {"query": "how to play chess"}),
-    ("Find yoga classes online", {"query": "online yoga classes"}),
-    ("Search best sci-fi movies", {"query": "best sci-fi movies"}),
-    ("Look up weather in London", {"query": "weather in London"}),
-    ("Find nearest post office", {"query": "post office near me"}),
-    ("Search for vegan restaurants", {"query": "vegan restaurants near me"}),
-    ("Look up SpaceX launch", {"query": "next SpaceX launch"}),
-    ("Find guitar chords for Wonderwall", {"query": "Wonderwall guitar chords"}),
-    ("Search history of Rome", {"query": "history of Rome"}),
-    ("Look up Tesla stock", {"query": "Tesla stock price"}),
-    ("Find cheap flights to NYC", {"query": "cheap flights to NYC"}),
-    ("Search how to knit", {"query": "how to knit for beginners"}),
-    ("Look up NBA standings", {"query": "NBA standings"}),
-    ("Find best burger places", {"query": "best burger places near me"}),
-    ("Search for iPhone reviews", {"query": "iPhone 15 reviews"}),
-    ("Look up symptoms of cold", {"query": "cold symptoms"}),
-    ("Find nearest hospital", {"query": "nearest hospital"}),
-    ("Search how to unclog drain", {"query": "how to unclog drain"}),
-    ("Look up USD to CAD", {"query": "USD to CAD exchange rate"}),
-    ("Find hiking boots reviews", {"query": "best hiking boots reviews"}),
-    ("Search for local events", {"query": "events near me this weekend"}),
-    ("Look up movie ratings", {"query": "latest movie ratings"}),
-    ("Find car rental agencies", {"query": "car rental agencies near me"}),
-    ("Search how to propagate plants", {"query": "how to propagate plants"}),
-    ("Look up definition of serendipity", {"query": "define serendipity"}),
-    ("Find dog parks nearby", {"query": "dog parks near me"}),
-    ("Search best budget phones", {"query": "best budget smartphones"}),
-    ("Look up train delays", {"query": "train delays today"}),
-    ("Find notary public", {"query": "notary public near me"}),
-    ("Search for gluten free pasta", {"query": "gluten free pasta brands"}),
-    ("Look up tax filing deadline", {"query": "tax filing deadline"}),
-    ("Find recycling center", {"query": "recycling center near me"}),
-    ("Search how to clean leather", {"query": "how to clean leather"}),
-    ("Look up golden retriever puppies", {"query": "golden retriever puppies for sale"}),
-    ("Find 24 hour pharmacy", {"query": "24 hour pharmacy near me"}),
-    ("Search for workout clothes", {"query": "best workout clothes"}),
-    ("Look up flights to Hawaii", {"query": "flights to Hawaii"}),
-    ("Find tailor nearby", {"query": "tailor near me"}),
-    ("Search how to meditate", {"query": "how to meditate"}),
-    ("Look up celebrity news", {"query": "latest celebrity news"}),
-    ("Find hardware store", {"query": "hardware store near me"}),
-    ("Search best running shoes", {"query": "best running shoes 2024"}),
-    ("Look up chicken soup recipe", {"query": "chicken soup recipe"}),
-    ("Find library hours", {"query": "local library hours"}),
-    ("Search for travel insurance", {"query": "best travel insurance"}),
-    ("Look up weather in Paris", {"query": "weather in Paris"}),
-    ("Find coworking spaces", {"query": "coworking spaces near me"}),
-    ("Search how to change oil", {"query": "how to change car oil"}),
 ]
 
 # ============ GET_SYSTEM_INFO (50 examples) ============
@@ -715,61 +490,11 @@ system_info_examples = [
     ("How's the weather outside?", {}),
     ("What tasks are pending?", {}),
     ("System status", {}),
-    ("How much battery is left?", {}),
-    ("What's running on my computer?", {}),
-    ("Check for system updates", {}),
-    ("Is the kitchen light still on?", {}),
-    ("How many alarms are set?", {}),
-    ("What's on the docket today?", {}),
-    ("Any timers running?", {}),
-    ("Give me a status report", {}),
-    ("What's the indoor temperature?", {}),
-    ("Do I have any missed calls?", {}),
-    ("Check smart home devices", {}),
-    ("How many unread emails?", {}),
-    ("Is the front door locked?", {}),
-    ("What's playing on the speakers?", {}),
-    ("Show me active tasks", {}),
-    ("Any upcoming birthdays?", {}),
-    ("What's the internet speed?", {}),
-    ("Check my daily summary", {}),
-    ("How much storage is free?", {}),
-    ("Is the garage door open?", {}),
-    ("What's the date today?", {}),
-    ("Show me the weather widget", {}),
-    ("Do I have any reminders?", {}),
-    ("Check thermostat settings", {}),
-    ("How many devices are connected?", {}),
-    ("Is the alarm armed?", {}),
-    ("What's the humidity level?", {}),
-    ("Check for package deliveries", {}),
-    ("Show system health", {}),
-    ("Any traffic alerts?", {}),
-    ("What's the next event?", {}),
-    ("Check light brightness", {}),
-    ("How many steps today?", {}),
-    ("Is the coffee maker on?", {}),
-    ("What's on my shopping list?", {}),
-    ("Check network status", {}),
-    ("Any severe weather alerts?", {}),
-    ("Show me the dashboard", {}),
-    ("What's my sleep score?", {}),
-    ("Check for software updates", {}),
-    ("Is the TV on?", {}),
-    ("What's the current time zone?", {}),
-    ("Check my notifications", {}),
-    ("How much data used?", {}),
-    ("Is the window open?", {}),
-    ("What's the air quality?", {}),
-    ("Check printer status", {}),
-    ("How many notes do I have?", {}),
-    ("Is the robot vacuum running?", {}),
-    ("What's the CPU usage?", {}),
-    ("Check backup status", {}),
-    ("How many photos took today?", {}),
 ]
 
 # ============ THINKING (50 examples) ============
+# Use thinking for: coding/debugging, math, multi-step reasoning, deep analysis,
+# detailed technical explanations, long-form writing that requires planning.
 thinking_examples = [
     "Explain how neural networks learn",
     "Write a Python function to sort a list",
@@ -793,88 +518,39 @@ thinking_examples = [
     "Explain how encryption works",
     "Write a class for a linked list",
     "Analyze this business problem",
-    "Explain the immune system",
+    "Explain the immune system in detail",
     "Write unit tests for this function",
     "Calculate the optimal route",
     "Explain cryptocurrency mining",
     "Write a parser for JSON",
-    "Analyze this dataset",
-    "Explain photosynthesis in detail",
-    "Write an API endpoint",
-    "Calculate mortgage payments",
-    "Explain how vaccines work",
-    "Write a sorting algorithm",
-    "Analyze this legal contract",
+    "Analyze this dataset for trends",
+    "Write an API endpoint in Python",
+    "Calculate mortgage payments for a $400k loan",
+    "Explain how vaccines produce immunity",
+    "Write a sorting algorithm from scratch",
+    "Analyze this legal contract for risks",
     "Explain climate change science",
-    "Write a web scraper",
+    "Write a web scraper in Python",
     "Calculate return on investment",
     "Explain supply chain logistics",
-    "Write a state machine",
+    "Write a state machine implementation",
     "Analyze this chemical reaction",
-    "Explain how GPS works",
-    "Write a cache implementation",
-    "Calculate statistical significance",
-    "Explain the electoral college",
-    "Write a database schema",
-    "Analyze this poem's meaning",
-    "Explain how MRI machines work",
     "Write a compression algorithm",
-    "Calculate depreciation",
-    "Explain the scientific method",
-    "Describe how a car engine works",
-    "Write a biography of Albert Einstein",
+    "Calculate statistical significance of this data",
+    "Write a database schema for an e-commerce app",
     "Solve the traveling salesman problem",
-    "Explain the plot of Inception",
-    "Write a poem about the ocean",
-    "Calculate the volume of a sphere",
-    "Explain the history of the internet",
-    "Write a Javascript function to fetch data",
-    "Analyze the themes in To Kill a Mockingbird",
-    "Explain how solar panels work",
-    "Write a C++ program for printing hello world",
-    "Calculate the trajectory of a projectile",
-    "Explain the French Revolution",
-    "Write a stored procedure in SQL",
-    "Analyze the impact of social media",
-    "Explain the theory of evolution",
-    "Write a bash script to backup files",
-    "Calculate the distance between two coordinates",
-    "Explain how airplanes fly",
-    "Write a short story about time travel",
-    "Analyze the causes of the Great Depression",
-    "Explain the basics of economics",
-    "Write a recipe for chocolate cake",
-    "Calculate the factorial of 10",
-    "Explain the water cycle",
-    "Write a review of the latest iPhone",
-    "Analyze the lyrics of Bohemian Rhapsody",
-    "Explain how 3D printing works",
-    "Write a letter to the editor",
-    "Calculate the mean and standard deviation",
-    "Explain the structure of an atom",
+    "Write a biography of Albert Einstein",
+    "Explain how MRI machines work",
     "Write a marketing plan for a new product",
-    "Analyze current geopolitical tensions",
-    "Explain the rules of cricket",
-    "Write a Python script for web scraping",
-    "Calculate the energy of a photon",
-    "Explain the human digestive system",
-    "Write a resignation letter",
-    "Analyze the color theory in art",
-    "Explain how nuclear reactors work",
-    "Write a critique of a movie",
-    "Calculate the roots of a quadratic equation",
-    "Explain the significance of DNA",
-    "Write a speech for a wedding",
-    "Analyze the trends in fashion",
-    "Explain how wireless charging works",
-    "Write a HTML/CSS template",
-    "Calculate the odds of winning lottery",
-    "Explain the Big Bang theory",
-    "Write a comparison of iOS and Android",
-    "Analyze the ethics of AI",
+    "Calculate the energy of a photon at 500nm",
+    "Write a bash script to automate backups",
+    "Analyze the themes in To Kill a Mockingbird",
+    "Explain how GPS determines location",
 ]
 
 # ============ NONTHINKING (50 examples) ============
+# Use nonthinking for: greetings, single-fact recall, brief acknowledgements,
+# simple definitions, and questions with a direct one-line answer.
 nonthinking_examples = [
     "Hello",
     "Hi there",
@@ -910,122 +586,395 @@ nonthinking_examples = [
     "No problem",
     "Good night",
     "Have a nice day",
-    "What time is it?",
-    "Who is the president?",
     "What's the currency of Japan?",
     "How many days in a week?",
     "What's the chemical symbol for gold?",
     "Who wrote 1984?",
     "Greetings",
-    "Howdy",
-    "What's going on?",
-    "I'm doing well",
     "Tell me a joke",
-    "Define apple",
     "What's the opposite of hot?",
-    "Name a planet",
     "What's the boiling point of water?",
-    "Who is Mickey Mouse?",
-    "What's your favorite color?",
-    "How old are you?",
-    "Do you like music?",
-    "What's the capital of Germany?",
-    "Who won the Super Bowl?",
-    "What is a cat?",
-    "How many legs does a spider have?",
-    "What's the fastest animal?",
-    "Who is the president of France?",
-    "What is the moon made of?",
     "How do you say hello in Spanish?",
     "What is 10 plus 5?",
-    "Who discovered America?",
-    "What is the color of grass?",
-    "How many hours in a day?",
-    "What is a computer?",
-    "Who is Batman?",
-    "What smells good?",
-    "How high is Mount Everest?",
-    "What is water made of?",
+    "What is the largest country by area?",
+    "How many legs does a spider have?",
+    "What's the fastest land animal?",
+    "What is the moon made of?",
+    "How many hours are in a day?",
     "Who wrote Romeo and Juliet?",
-    "What is the largest country?",
-    "How many fingers do humans have?",
-    "What is a phone?",
-    "Who is the queen of England?",
-    "What is ice?",
-    "How do birds fly?",
-    "What is the sun?",
-    "Who is famous?",
-    "What is a book?",
-    "How much is a dollar?",
-    "What is a car?",
-    "Who is innovative?",
-    "What is a tree?",
-    "How deep is the ocean?",
-    "What is a house?",
-    "Who is smart?",
-    "What is fire?",
-    "How fast is a cheetah?",
-    "What is a cloud?",
-    "Who is kind?",
-    "What is a dog?",
-    "How long is a year?",
-    "What is a star?",
-    "Who is strong?",
-    "What is a flower?",
-    "How loud is a concert?",
-    "What is a movie?",
-    "Who is funny?",
-    "What is a game?",
-    "How sweet is sugar?",
 ]
 
-# Generate all examples
+# ============ CONTROL_RGB_LIGHTING (50 examples) ============
+# High-level dispatcher: routes to brightness, canvas, or effect actions.
+control_rgb_examples = [
+    # Brightness control (20 examples)
+    ("Set RGB brightness to 75", {"action": "set_brightness", "brightness": 75}),
+    ("Make the RGB lights brighter", {"action": "set_brightness", "brightness": 85}),
+    ("Dim RGB lighting to 30%", {"action": "set_brightness", "brightness": 30}),
+    ("Set RGB brightness to full", {"action": "set_brightness", "brightness": 100}),
+    ("Lower RGB brightness to 20", {"action": "set_brightness", "brightness": 20}),
+    ("Set RGB lights to half brightness", {"action": "set_brightness", "brightness": 50}),
+    ("Make RGB lighting very dim", {"action": "set_brightness", "brightness": 10}),
+    ("Increase RGB brightness to 90", {"action": "set_brightness", "brightness": 90}),
+    ("Set RGB to medium brightness", {"action": "set_brightness", "brightness": 60}),
+    ("Brighten RGB lights to 70%", {"action": "set_brightness", "brightness": 70}),
+    ("Set RGB brightness to 45", {"action": "set_brightness", "brightness": 45}),
+    ("Dim RGB lights to 15%", {"action": "set_brightness", "brightness": 15}),
+    ("Set RGB lighting to 80%", {"action": "set_brightness", "brightness": 80}),
+    ("Make RGB lights slightly brighter", {"action": "set_brightness", "brightness": 65}),
+    ("Set RGB brightness to 35", {"action": "set_brightness", "brightness": 35}),
+    ("Increase RGB light intensity to max", {"action": "set_brightness", "brightness": 100}),
+    ("Set RGB to 25% brightness", {"action": "set_brightness", "brightness": 25}),
+    ("Brighten RGB to 95%", {"action": "set_brightness", "brightness": 95}),
+    ("Dim RGB lighting down to 40", {"action": "set_brightness", "brightness": 40}),
+    ("Set RGB brightness level to 55", {"action": "set_brightness", "brightness": 55}),
+    # Canvas enable/disable (10 examples)
+    ("Enable RGB canvas", {"action": "enable_canvas"}),
+    ("Turn on RGB lighting canvas", {"action": "enable_canvas"}),
+    ("Activate RGB canvas mode", {"action": "enable_canvas"}),
+    ("Enable the RGB lighting canvas", {"action": "enable_canvas"}),
+    ("Start RGB canvas", {"action": "enable_canvas"}),
+    ("Disable RGB canvas", {"action": "disable_canvas"}),
+    ("Turn off RGB lighting canvas", {"action": "disable_canvas"}),
+    ("Deactivate RGB canvas mode", {"action": "disable_canvas"}),
+    ("Disable the RGB lighting canvas", {"action": "disable_canvas"}),
+    ("Stop RGB canvas", {"action": "disable_canvas"}),
+    # Effect application (20 examples)
+    ("Apply Rainbow effect to RGB lighting", {"action": "apply_effect", "effect_name": "Rainbow"}),
+    ("Set RGB to Breathing effect", {"action": "apply_effect", "effect_name": "Breathing"}),
+    ("Use Wave effect for RGB lights", {"action": "apply_effect", "effect_name": "Wave"}),
+    ("Apply Gradient effect", {"action": "apply_effect", "effect_name": "Gradient"}),
+    ("Set RGB lighting to Color Shift", {"action": "apply_effect", "effect_name": "Color Shift"}),
+    ("Use Marquee effect", {"action": "apply_effect", "effect_name": "Marquee"}),
+    ("Apply Alternating effect", {"action": "apply_effect", "effect_name": "Alternating"}),
+    ("Set RGB to Cross effect", {"action": "apply_effect", "effect_name": "Cross"}),
+    ("Use Round Robin effect", {"action": "apply_effect", "effect_name": "Round Robin"}),
+    ("Apply Random effect", {"action": "apply_effect", "effect_name": "Random"}),
+    ("Set RGB lighting to Static effect", {"action": "apply_effect", "effect_name": "Static"}),
+    ("Use Fading effect", {"action": "apply_effect", "effect_name": "Fading"}),
+    ("Apply Chase effect", {"action": "apply_effect", "effect_name": "Chase"}),
+    ("Set RGB to Flash effect", {"action": "apply_effect", "effect_name": "Flash"}),
+    ("Use Pulse effect on my RGB", {"action": "apply_effect", "effect_name": "Pulse"}),
+    ("Apply Smooth effect", {"action": "apply_effect", "effect_name": "Smooth"}),
+    ("Set RGB to Aurora effect", {"action": "apply_effect", "effect_name": "Aurora"}),
+    ("Use Comet effect for RGB lighting", {"action": "apply_effect", "effect_name": "Comet"}),
+    ("Apply Fire effect to my setup", {"action": "apply_effect", "effect_name": "Fire"}),
+    ("Set RGB lighting to Matrix effect", {"action": "apply_effect", "effect_name": "Matrix"}),
+]
+
+# ============ CHECK_SIGNALRGB_CONNECTION (25 examples) ============
+check_rgb_connection_examples = [
+    ("Is SignalRGB connected?", {}),
+    ("Check if the RGB API is available", {}),
+    ("Is the SignalRGB service running?", {}),
+    ("Can you reach the RGB lighting API?", {}),
+    ("Verify SignalRGB connection", {}),
+    ("Is RGB lighting control available?", {}),
+    ("Check SignalRGB status", {}),
+    ("Is the lighting software connected?", {}),
+    ("Test the RGB API connection", {}),
+    ("Ping the SignalRGB service", {}),
+    ("Make sure SignalRGB is online", {}),
+    ("Is the RGB controller reachable?", {}),
+    ("Check if RGB software is active", {}),
+    ("Are the RGB controls accessible?", {}),
+    ("Confirm SignalRGB is running", {}),
+    ("Is the lighting API up?", {}),
+    ("Validate the SignalRGB connection", {}),
+    ("Check RGB service availability", {}),
+    ("Is SignalRGB responding?", {}),
+    ("Can the app talk to SignalRGB?", {}),
+    ("Detect if SignalRGB is installed and running", {}),
+    ("Probe the RGB API", {}),
+    ("Is the SignalRGB backend reachable?", {}),
+    ("Check if RGB automation is possible", {}),
+    ("Is RGB lighting management available right now?", {}),
+]
+
+# ============ GET_CURRENT_RGB_EFFECT (25 examples) ============
+get_current_rgb_examples = [
+    ("What RGB effect is currently active?", {}),
+    ("What's the current lighting effect?", {}),
+    ("Which effect is running on my RGB?", {}),
+    ("Show me the active RGB effect", {}),
+    ("What effect do I have on right now?", {}),
+    ("What's playing on my RGB lights?", {}),
+    ("Get the current RGB mode", {}),
+    ("Tell me the active lighting effect", {}),
+    ("Which RGB animation is active?", {}),
+    ("What's my current SignalRGB effect?", {}),
+    ("Show the current effect name", {}),
+    ("What effect is on my setup?", {}),
+    ("Fetch the active RGB effect", {}),
+    ("What lighting mode is running?", {}),
+    ("Current RGB effect please", {}),
+    ("Get current lighting animation", {}),
+    ("Which effect is loaded right now?", {}),
+    ("What is the RGB set to?", {}),
+    ("Show active effect name", {}),
+    ("What is the RGB currently doing?", {}),
+    ("Read the current RGB effect", {}),
+    ("Retrieve the running lighting effect", {}),
+    ("Which preset is active on my RGB?", {}),
+    ("What effect is SignalRGB using?", {}),
+    ("Get the name of the current RGB effect", {}),
+]
+
+# ============ SET_RGB_BRIGHTNESS (25 examples) ============
+# Low-level direct API call (complements the high-level control_rgb_lighting)
+set_rgb_brightness_examples = [
+    ("Directly set RGB brightness to 80", {"brightness": 80}),
+    ("Call set brightness 50 on RGB API", {"brightness": 50}),
+    ("Set the RGB brightness value to 30", {"brightness": 30}),
+    ("RGB brightness API call: 100", {"brightness": 100}),
+    ("Push brightness level 70 to SignalRGB", {"brightness": 70}),
+    ("Set brightness parameter to 40 in SignalRGB", {"brightness": 40}),
+    ("Update RGB brightness to 90 via API", {"brightness": 90}),
+    ("Send brightness 20 to the RGB controller", {"brightness": 20}),
+    ("Set global RGB brightness to 60", {"brightness": 60}),
+    ("Change the RGB brightness value to 75", {"brightness": 75}),
+    ("Apply brightness level 10 to all RGB", {"brightness": 10}),
+    ("Set RGB API brightness parameter to 55", {"brightness": 55}),
+    ("Update global brightness to 85 in SignalRGB", {"brightness": 85}),
+    ("Set RGB light level to 45", {"brightness": 45}),
+    ("Apply brightness 65 to RGB lighting", {"brightness": 65}),
+    ("Send brightness value 35 to SignalRGB", {"brightness": 35}),
+    ("Set RGB intensity to 95", {"brightness": 95}),
+    ("Update the SignalRGB brightness to 25", {"brightness": 25}),
+    ("Set global brightness parameter to 15", {"brightness": 15}),
+    ("Push brightness 5 to RGB system", {"brightness": 5}),
+    ("Set SignalRGB brightness level to 100", {"brightness": 100}),
+    ("Update RGB brightness via API to 0", {"brightness": 0}),
+    ("Set RGB brightness to 48", {"brightness": 48}),
+    ("Apply brightness 72 to SignalRGB", {"brightness": 72}),
+    ("Set the lighting brightness to 33 on RGB", {"brightness": 33}),
+]
+
+# ============ ENABLE_RGB_CANVAS (25 examples) ============
+enable_rgb_canvas_examples = [
+    ("Enable the RGB canvas now", {"enabled": True}),
+    ("Turn on the SignalRGB canvas", {"enabled": True}),
+    ("Switch the RGB canvas on", {"enabled": True}),
+    ("Activate the RGB canvas", {"enabled": True}),
+    ("Set RGB canvas enabled to true", {"enabled": True}),
+    ("Start the lighting canvas", {"enabled": True}),
+    ("Enable canvas in SignalRGB", {"enabled": True}),
+    ("Power on the RGB canvas layer", {"enabled": True}),
+    ("Resume the RGB canvas", {"enabled": True}),
+    ("Restore the lighting canvas", {"enabled": True}),
+    ("Disable the RGB canvas now", {"enabled": False}),
+    ("Turn off the SignalRGB canvas", {"enabled": False}),
+    ("Switch the RGB canvas off", {"enabled": False}),
+    ("Deactivate the RGB canvas", {"enabled": False}),
+    ("Set RGB canvas enabled to false", {"enabled": False}),
+    ("Stop the lighting canvas", {"enabled": False}),
+    ("Disable canvas in SignalRGB", {"enabled": False}),
+    ("Power off the RGB canvas layer", {"enabled": False}),
+    ("Pause the RGB canvas", {"enabled": False}),
+    ("Suspend the lighting canvas", {"enabled": False}),
+    ("RGB canvas on", {"enabled": True}),
+    ("RGB canvas off", {"enabled": False}),
+    ("Set canvas state to enabled", {"enabled": True}),
+    ("Set canvas state to disabled", {"enabled": False}),
+    ("Toggle canvas to active state", {"enabled": True}),
+]
+
+# ============ GET_INSTALLED_RGB_EFFECTS (25 examples) ============
+get_installed_effects_examples = [
+    ("What RGB effects are installed?", {}),
+    ("List all available lighting effects", {}),
+    ("Show me the installed RGB effects", {}),
+    ("What effects can I use in SignalRGB?", {}),
+    ("Get all installed RGB animations", {}),
+    ("Which lighting effects are available?", {}),
+    ("Fetch the list of RGB effects", {}),
+    ("What effects does SignalRGB have?", {}),
+    ("Show available effects for RGB", {}),
+    ("List installed SignalRGB effects", {}),
+    ("Get all RGB effect names", {}),
+    ("What animations are available?", {}),
+    ("Show all lighting modes available", {}),
+    ("Retrieve installed effects list", {}),
+    ("What effects can I apply to my RGB?", {}),
+    ("List the lighting effects I have", {}),
+    ("Get available SignalRGB effects", {}),
+    ("Show RGB effect library", {}),
+    ("What are my RGB options?", {}),
+    ("Enumerate all RGB effects", {}),
+    ("Fetch installed lighting effects from SignalRGB", {}),
+    ("What effects are on my system?", {}),
+    ("Display the list of RGB effects", {}),
+    ("Get all available animation effects", {}),
+    ("What lighting options does SignalRGB offer?", {}),
+]
+
+# ============ GET_RGB_EFFECT_INFO (25 examples) ============
+get_rgb_effect_info_examples = [
+    ("Get details on the Rainbow effect", {"effect_id": "Rainbow"}),
+    ("Tell me about the Breathing effect", {"effect_id": "Breathing"}),
+    ("What parameters does the Wave effect have?", {"effect_id": "Wave"}),
+    ("Get info for the Gradient effect", {"effect_id": "Gradient"}),
+    ("Show details for Color Shift effect", {"effect_id": "Color Shift"}),
+    ("Describe the Marquee effect", {"effect_id": "Marquee"}),
+    ("Get effect info for Alternating", {"effect_id": "Alternating"}),
+    ("What does the Cross effect do?", {"effect_id": "Cross"}),
+    ("Tell me about Round Robin effect", {"effect_id": "Round Robin"}),
+    ("Get details on Random effect", {"effect_id": "Random"}),
+    ("Show info for Static effect", {"effect_id": "Static"}),
+    ("Describe the Fading effect", {"effect_id": "Fading"}),
+    ("What options does Chase have?", {"effect_id": "Chase"}),
+    ("Get info on Flash effect", {"effect_id": "Flash"}),
+    ("Tell me about the Pulse effect", {"effect_id": "Pulse"}),
+    ("Describe the Smooth effect", {"effect_id": "Smooth"}),
+    ("Get info for Aurora effect", {"effect_id": "Aurora"}),
+    ("Tell me about Comet effect options", {"effect_id": "Comet"}),
+    ("What parameters does Fire have?", {"effect_id": "Fire"}),
+    ("Get effect info for Matrix", {"effect_id": "Matrix"}),
+    ("Show details for Storm effect", {"effect_id": "Storm"}),
+    ("What does the Glitch effect do?", {"effect_id": "Glitch"}),
+    ("Get info for the Starlight effect", {"effect_id": "Starlight"}),
+    ("Describe the Vortex effect", {"effect_id": "Vortex"}),
+    ("Tell me about the Spectrum effect", {"effect_id": "Spectrum"}),
+]
+
+# ============ APPLY_RGB_EFFECT (25 examples) ============
+apply_rgb_effect_examples = [
+    ("Apply the Rainbow effect", {"effect_id": "Rainbow"}),
+    ("Load the Breathing effect", {"effect_id": "Breathing"}),
+    ("Run the Wave effect", {"effect_id": "Wave"}),
+    ("Apply Gradient to RGB lighting", {"effect_id": "Gradient"}),
+    ("Load Color Shift effect", {"effect_id": "Color Shift"}),
+    ("Apply Marquee effect now", {"effect_id": "Marquee"}),
+    ("Run the Alternating effect", {"effect_id": "Alternating"}),
+    ("Apply Cross effect via API", {"effect_id": "Cross"}),
+    ("Load Round Robin effect", {"effect_id": "Round Robin"}),
+    ("Apply Random to the RGB system", {"effect_id": "Random"}),
+    ("Run Static effect on RGB", {"effect_id": "Static"}),
+    ("Apply the Fading effect", {"effect_id": "Fading"}),
+    ("Load Chase effect", {"effect_id": "Chase"}),
+    ("Apply Flash effect to lighting", {"effect_id": "Flash"}),
+    ("Run Pulse effect", {"effect_id": "Pulse"}),
+    ("Apply Smooth effect via SignalRGB", {"effect_id": "Smooth"}),
+    ("Load Aurora effect", {"effect_id": "Aurora"}),
+    ("Apply Comet effect to my RGB", {"effect_id": "Comet"}),
+    ("Run Fire effect on the RGB", {"effect_id": "Fire"}),
+    ("Load Matrix effect", {"effect_id": "Matrix"}),
+    ("Apply Storm effect", {"effect_id": "Storm"}),
+    ("Run Glitch effect", {"effect_id": "Glitch"}),
+    ("Apply Starlight effect to RGB", {"effect_id": "Starlight"}),
+    ("Load Vortex effect now", {"effect_id": "Vortex"}),
+    ("Apply the Spectrum effect", {"effect_id": "Spectrum"}),
+]
+
+# ============ GET_RGB_EFFECT_PRESETS (25 examples) ============
+get_rgb_effect_presets_examples = [
+    ("Get presets for Rainbow effect", {"effect_id": "Rainbow"}),
+    ("Show presets for Breathing", {"effect_id": "Breathing"}),
+    ("List Wave effect presets", {"effect_id": "Wave"}),
+    ("What presets does Gradient have?", {"effect_id": "Gradient"}),
+    ("Fetch presets for Color Shift", {"effect_id": "Color Shift"}),
+    ("Get available presets for Marquee", {"effect_id": "Marquee"}),
+    ("Show Alternating effect presets", {"effect_id": "Alternating"}),
+    ("List presets for Cross effect", {"effect_id": "Cross"}),
+    ("Get Round Robin presets", {"effect_id": "Round Robin"}),
+    ("What presets are available for Random?", {"effect_id": "Random"}),
+    ("Fetch Static effect presets", {"effect_id": "Static"}),
+    ("Show Fading presets", {"effect_id": "Fading"}),
+    ("Get presets for Chase effect", {"effect_id": "Chase"}),
+    ("List available Flash presets", {"effect_id": "Flash"}),
+    ("What presets does Pulse have?", {"effect_id": "Pulse"}),
+    ("Get presets for Smooth", {"effect_id": "Smooth"}),
+    ("Show Aurora effect presets", {"effect_id": "Aurora"}),
+    ("Fetch Comet presets", {"effect_id": "Comet"}),
+    ("Get presets for Fire effect", {"effect_id": "Fire"}),
+    ("List Matrix effect presets", {"effect_id": "Matrix"}),
+    ("Show Storm presets", {"effect_id": "Storm"}),
+    ("Get available Glitch presets", {"effect_id": "Glitch"}),
+    ("List presets for Starlight effect", {"effect_id": "Starlight"}),
+    ("Get Vortex effect presets", {"effect_id": "Vortex"}),
+    ("Show presets for Spectrum effect", {"effect_id": "Spectrum"}),
+]
+
+# ---------------------------------------------------------------------------
+# Assemble all examples
+# ---------------------------------------------------------------------------
 all_examples = []
 
-# Add control_light
 for prompt, args in control_light_examples:
     all_examples.append(make_example(prompt, "control_light", args))
 
-# Add set_timer
 for prompt, args in set_timer_examples:
     all_examples.append(make_example(prompt, "set_timer", args))
 
-# Add set_alarm
 for prompt, args in set_alarm_examples:
     all_examples.append(make_example(prompt, "set_alarm", args))
 
-# Add calendar
 for prompt, args in calendar_examples:
     all_examples.append(make_example(prompt, "create_calendar_event", args))
 
-# Add tasks
 for prompt, args in task_examples:
     all_examples.append(make_example(prompt, "add_task", args))
 
-# Add search
 for prompt, args in search_examples:
     all_examples.append(make_example(prompt, "web_search", args))
 
-# Add system_info
 for prompt, args in system_info_examples:
     all_examples.append(make_example(prompt, "get_system_info", args))
 
-# Add thinking
 for prompt in thinking_examples:
     all_examples.append(make_example(prompt, "thinking", {"prompt": prompt}))
 
-# Add nonthinking
 for prompt in nonthinking_examples:
     all_examples.append(make_example(prompt, "nonthinking", {"prompt": prompt}))
 
-# Shuffle
+# RGB examples
+for prompt, args in control_rgb_examples:
+    all_examples.append(make_example(prompt, "control_rgb_lighting", args))
+
+for prompt, args in check_rgb_connection_examples:
+    all_examples.append(make_example(prompt, "check_signalrgb_connection", args))
+
+for prompt, args in get_current_rgb_examples:
+    all_examples.append(make_example(prompt, "get_current_rgb_effect", args))
+
+for prompt, args in set_rgb_brightness_examples:
+    all_examples.append(make_example(prompt, "set_rgb_brightness", args))
+
+for prompt, args in enable_rgb_canvas_examples:
+    all_examples.append(make_example(prompt, "enable_rgb_canvas", args))
+
+for prompt, args in get_installed_effects_examples:
+    all_examples.append(make_example(prompt, "get_installed_rgb_effects", args))
+
+for prompt, args in get_rgb_effect_info_examples:
+    all_examples.append(make_example(prompt, "get_rgb_effect_info", args))
+
+for prompt, args in apply_rgb_effect_examples:
+    all_examples.append(make_example(prompt, "apply_rgb_effect", args))
+
+for prompt, args in get_rgb_effect_presets_examples:
+    all_examples.append(make_example(prompt, "get_rgb_effect_presets", args))
+
+# ---------------------------------------------------------------------------
+# Shuffle and write
+# ---------------------------------------------------------------------------
 random.seed(42)
 random.shuffle(all_examples)
 
-# Write to file
-with open("training_dataset_functions.jsonl", "w") as f:
+output_path = "training_dataset_functions.jsonl"
+with open(output_path, "w") as f:
     for ex in all_examples:
         f.write(json.dumps(ex) + "\n")
 
 print(f"Generated {len(all_examples)} training examples")
-print("Saved to training_dataset_functions.jsonl")
+print(f"Saved to {output_path}")
+
+# Per-function breakdown
+from collections import Counter
+fn_counts = Counter(
+    ex["messages"][2]["tool_calls"][0]["function"]["name"]
+    for ex in all_examples
+)
+print("\nExamples per function:")
+for fn, count in sorted(fn_counts.items()):
+    print(f"  {fn:<35} {count}")

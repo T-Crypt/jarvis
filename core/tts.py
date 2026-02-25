@@ -65,9 +65,9 @@ class SentenceBuffer:
 class PiperTTS:
     """Piper TTS wrapper using pre-built executable for Windows compatibility."""
     
-    VOICE_MODEL = "en_GB-northern_english_male-medium"
-    MODEL_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/northern_english_male/medium/en_GB-northern_english_male-medium.onnx"
-    CONFIG_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/northern_english_male/medium/en_GB-northern_english_male-medium.onnx.json"
+    VOICE_MODEL = "en_US-ryan-high"
+    MODEL_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/high/en_US-ryan-high.onnx"
+    CONFIG_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/high/en_US-ryan-high.onnx.json"
     
     # Piper Windows executable
     PIPER_VERSION = "2023.11.14-2"

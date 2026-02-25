@@ -85,6 +85,12 @@ class FunctionExecutor:
             self.news_manager = NewsManager()
         except Exception as e:
             print(f"[FunctionExecutor] NewsManager init failed: {e}")
+
+        try:
+            from core.signalrgb import signalrgb_client
+            self.signalrgb_client = signalrgb_client
+        except Exception as e:
+            print(f"[FunctionExecutor] SignalRGB client init failed: {e}")
     
     def execute(self, func_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -112,6 +118,8 @@ class FunctionExecutor:
                 return self._web_search(params)
             elif func_name == "get_system_info":
                 return self._get_system_info()
+            elif func_name == "control_rgb_lighting":
+                return self._control_rgb_lighting(params)
             else:
                 return {"success": False, "message": f"Unknown function: {func_name}", "data": None}
         except Exception as e:
@@ -575,6 +583,76 @@ class FunctionExecutor:
             "message": "System info retrieved",
             "data": info
         }
+
+    def _control_rgb_lighting(self, params: Dict) -> Dict:
+        """Control PC RGB lighting via SignalRGB."""
+        action = params.get("action")
+        brightness = params.get("brightness")
+        effect_name = params.get("effect_name")
+
+        if not action:
+            return {"success": False, "message": "No action specified", "data": None}
+
+        if not self.signalrgb_client:
+            return {"success": False, "message": "SignalRGB client not available", "data": None}
+
+        # Check if SignalRGB API is reachable
+        if not self.signalrgb_client.check_connection():
+            return {"success": False, "message": "SignalRGB API not reachable", "data": None}
+
+        # Route action to appropriate method
+        if action == "set_brightness":
+            if brightness is None:
+                return {"success": False, "message": "Brightness value required for set_brightness action", "data": None}
+            success = self.signalrgb_client.set_global_brightness(brightness)
+            if success:
+                return {"success": True, "message": f"RGB brightness set to {brightness}%", "data": {"action": action, "brightness": brightness}}
+            return {"success": False, "message": "Failed to set brightness", "data": None}
+
+        elif action == "enable_canvas":
+            success = self.signalrgb_client.enable_canvas(True)
+            if success:
+                return {"success": True, "message": "RGB canvas enabled", "data": {"action": action}}
+            return {"success": False, "message": "Failed to enable canvas", "data": None}
+
+        elif action == "disable_canvas":
+            success = self.signalrgb_client.enable_canvas(False)
+            if success:
+                return {"success": True, "message": "RGB canvas disabled", "data": {"action": action}}
+            return {"success": False, "message": "Failed to disable canvas", "data": None}
+
+        elif action == "apply_effect":
+            if not effect_name:
+                return {"success": False, "message": "Effect name required for apply_effect action", "data": None}
+
+            # First, try to get all installed effects
+            effects = self.signalrgb_client.get_installed_effects()
+            if effects:
+                # Find effect by name or ID
+                target_effect = None
+                for effect in effects:
+                    effect_data = effect.get("attributes", {})
+                    if effect_data.get("id") == effect_name or effect_data.get("name") == effect_name:
+                        target_effect = effect
+                        break
+
+                if target_effect:
+                    effect_id = target_effect.get("attributes", {}).get("id")
+                    success = self.signalrgb_client.apply_effect(effect_id)
+                    if success:
+                        return {"success": True, "message": f"Applied RGB effect: {effect_name}", "data": {"action": action, "effect": effect_name}}
+                    return {"success": False, "message": "Failed to apply effect", "data": None}
+                else:
+                    return {"success": False, "message": f"Effect '{effect_name}' not found", "data": None}
+            else:
+                # If we can't get the list, try applying directly
+                success = self.signalrgb_client.apply_effect(effect_name)
+                if success:
+                    return {"success": True, "message": f"Applied RGB effect: {effect_name}", "data": {"action": action, "effect": effect_name}}
+                return {"success": False, "message": "Failed to apply effect", "data": None}
+
+        else:
+            return {"success": False, "message": f"Unknown action: {action}", "data": None}
 
 
 # Global instance

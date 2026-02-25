@@ -16,24 +16,30 @@ from gui.app import MainWindow
 from qfluentwidgets import qconfig, Theme, SplashScreen
 
 if __name__ == "__main__":
+    # Set UTF-8 encoding for console output to handle Unicode characters
+    import io
+    import sys as _sys
+    _sys.stdout = io.TextIOWrapper(_sys.stdout.buffer, encoding='utf-8')
+    _sys.stderr = io.TextIOWrapper(_sys.stderr.buffer, encoding='utf-8')
+
     app = QApplication(sys.argv)
-    
+
     # Configure Aura Theme
     qconfig.theme = Theme.DARK
-    
+
     # Set default font
     app.setFont(QFont("Segoe UI", 10))
-    
+
     # Create SplashScreen
     splash = SplashScreen(QIcon("gui/assets/logo.png" if "gui/assets/logo.png" else None), None)
     splash.setIconSize(QSize(100, 100))
     splash.show()
-    
+
     # Create main window
     window = MainWindow()
-    
+
     # Show window and finish splash
     window.show()
     splash.finish()
-    
+
     sys.exit(app.exec())

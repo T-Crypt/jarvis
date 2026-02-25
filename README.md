@@ -17,6 +17,7 @@
 | 🎤 **Voice Control** | Wake word detection ("Jarvis") with natural language commands |
 | 💬 **AI Chat** | Interactive chat with local LLMs via Ollama with streaming responses |
 | 🏠 **Smart Home** | Control TP-Link Kasa smart lights and plugs from the app |
+| 💡 **RGB Lighting** | Control PC RGB lighting via SignalRGB integration |
 | 📅 **Planner** | Manage calendar events, alarms, and timers |
 | 📰 **Daily Briefing** | AI-curated news from Technology, Science, and Top Stories |
 | 🌤️ **Weather** | Current weather and hourly forecast on your dashboard |
