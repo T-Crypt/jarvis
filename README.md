@@ -9,6 +9,8 @@
 > 🔒 **Your data stays on your machine.** No API keys required for core functionality. No subscriptions. No data collection.
 
 ---
+![Jarvis Dashboard](src/jarvis.png)
+---
 
 ## ✨ Key Features
 

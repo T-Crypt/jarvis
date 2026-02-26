@@ -27,5 +27,3 @@ venv/
 .vscode/
 .idea/
 
-# Images
-src/
