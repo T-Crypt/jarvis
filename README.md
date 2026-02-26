@@ -187,7 +187,7 @@ The following models are **downloaded automatically** on first run—no manual s
 | Model | Purpose | Size | Downloaded From |
 |-------|---------|------|-----------------|
 | **Router Model** | Intent classification | ~500MB | [Hugging Face](https://huggingface.co/nlouis/pocket-ai-router) |
-| **TTS Voice** | Text-to-speech | ~50MB | [Piper Voices](https://huggingface.co/rhasspy/piper-voices) |
+| **TTS Voice** | Text-to-speech | ~50MB | [Jarvis Voices]([https://huggingface.co/rhasspy/piper-voices](https://huggingface.co/jgkawell/jarvis)) |
 | **STT Model** | Speech-to-text (Whisper) | ~150MB | OpenAI Whisper |
 
 > 📦 **First launch will take a few minutes** while these models download. Subsequent launches are instant.
@@ -196,7 +196,7 @@ The following models are **downloaded automatically** on first run—no manual s
 
 ## 🎙️ Voice Assistant Setup
 
-A.D.A includes Alexa-like voice control with wake word detection.
+Jarvis includes Alexa-like voice control with wake word detection.
 
 ### How It Works
 
@@ -259,12 +259,12 @@ OLLAMA_URL = "http://localhost:11434/api"
 
 ```python
 # Voice model (downloads automatically on first run)
-TTS_VOICE_MODEL = "en_GB-northern_english_male-medium"
+TTS_VOICE_MODEL = "en_GB-jarvis-high"
 ```
 
 ### Weather Location
 
-The default location is New York City. To change it:
+The default location is Denver, CO. To change it:
 
 1. Open the app
 2. Go to **Settings** tab
@@ -454,7 +454,7 @@ This project is open source. See [LICENSE](LICENSE) for details.
 
 - [Ollama](https://ollama.com/) - Local LLM inference
 - [QFluentWidgets](https://github.com/zhiyiYo/PyQt-Fluent-Widgets) - Beautiful UI components
-- [Piper TTS](https://github.com/rhasspy/piper) - Lightweight text-to-speech
+- [Jarvis TTS]((https://huggingface.co/jgkawell/jarvis)) - Lightweight text-to-speech
 - [python-kasa](https://github.com/python-kasa/python-kasa) - Kasa device control
 - [RealTimeSTT](https://github.com/KoljaB/RealtimeSTT) - Speech recognition
 
