@@ -151,7 +151,7 @@ Open http://localhost:6006 in a browser.
 python main.py
 ```
 
-🎉 A.D.A will launch with GUI, RGB integration, and all features.
+🎉 Jarvis will launch with GUI, RGB integration, and all features.
 
 ---
 
