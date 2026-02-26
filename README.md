@@ -10,8 +10,7 @@
 
 ### 🎬 JARVIS System Interface in Action
 
-<video src="https://github.com/T-Crypt/jarvis/raw/main/src/jarvis.mp4" width="100%" controls="controls" muted="muted"></video>
----
+[Jarvis Preview](https://github.com/T-Crypt/jarvis/blob/main/src/jarvis.mp4)
 
 ## ✨ Key Features
 
