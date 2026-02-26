@@ -1,4 +1,4 @@
-# 🤖 JARVIS
+<h1 align="center">🤖 JARVIS</h1>
 
 <p align="center">
   <img src="gui/assets/logo.png" alt="Jarvis Logo" width="120" height="120">
