@@ -87,6 +87,11 @@ ollama pull qwen3:1.7b
 # Stronger reasoning capabilities - slightly slower
 ollama pull deepseek-r1:1.5b
 ```
+**🔹 Option C: Qwen3:8b (High Reasoning -- Large VRAM Users)**
+```bash
+# Stronger reasoning capabilities - slightly slower
+ollama pull qwen3:8b
+```
 
 > 💡 **Tip**: You can switch models anytime in `config.py` by changing `RESPONDER_MODEL`.
 
