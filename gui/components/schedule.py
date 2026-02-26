@@ -2,12 +2,11 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, 
     QScrollArea, QPushButton
 )
-from PySide6.QtCore import Qt, QDate, QTime, QDateTime, Signal
+from PySide6.QtCore import Qt, QDate, QTime, QDateTime
 from PySide6.QtGui import QColor
 
 from qfluentwidgets import (
-    PushButton, PrimaryPushButton, LineEdit, 
-    ComboBox, MessageBoxBase, SubtitleLabel
+    PushButton, LineEdit, ComboBox, MessageBoxBase, SubtitleLabel
 )
 from qfluentwidgets.components.date_time.fast_calendar_view import FastCalendarView as CalendarView
 from qfluentwidgets.components.date_time.calendar_picker import CalendarPicker
@@ -20,37 +19,32 @@ class AddEventDialog(MessageBoxBase):
     """Custom Dialog for adding events using Fluent Widgets."""
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.titleLabel = SubtitleLabel("Add Event", self)
+        self.titleLabel = SubtitleLabel("ADD TIMELINE EVENT", self)
+        self.titleLabel.setStyleSheet("color: #00d4ff; font-family: Consolas; letter-spacing: 1px;")
         
-        # UI Setup
         self.viewLayout.addWidget(self.titleLabel)
         
-        # Title Input
         self.titleEdit = LineEdit(self)
-        self.titleEdit.setPlaceholderText("Event Title")
+        self.titleEdit.setPlaceholderText("Event Designation")
         self.viewLayout.addWidget(self.titleEdit)
         
-        # Date Picker
         self.datePicker = CalendarPicker(self)
         self.datePicker.setDate(QDate.currentDate())
         self.viewLayout.addWidget(self.datePicker)
         
-        # Time Picker
         self.timePicker = TimePicker(self)
         self.timePicker.setTime(QTime.currentTime())
-        # Use 24h format or AM/PM? TimePicker defaults to system or 24h usually.
         self.viewLayout.addWidget(self.timePicker)
         
-        # Category
         self.catCombo = ComboBox(self)
-        self.catCombo.addItems(["WORK", "PERSONAL", "OTHER"])
+        self.catCombo.addItems(["DIRECTIVE", "PERSONAL", "SYSTEM"])
         self.viewLayout.addWidget(self.catCombo)
         
-        # Buttons are handled by MessageBoxBase (yesButton, cancelButton)
-        self.yesButton.setText("Save")
-        self.cancelButton.setText("Cancel")
+        self.yesButton.setText("INITIALIZE")
+        self.cancelButton.setText("ABORT")
         
         self.widget.setMinimumWidth(350)
+        self.widget.setStyleSheet("background-color: #050a12; border: 1px solid rgba(0, 212, 255, 0.3); border-radius: 12px;")
         
     def get_data(self):
         title = self.titleEdit.text()
@@ -65,7 +59,7 @@ class AddEventDialog(MessageBoxBase):
         return title, start, end, cat
 
 class ScheduleComponent(QWidget):
-    """Component for displaying daily schedule and calendar. Fluent Version."""
+    """JARVIS Timeline Component."""
     
     def __init__(self):
         super().__init__()
@@ -85,26 +79,26 @@ class ScheduleComponent(QWidget):
         
         # Header
         header_layout = QHBoxLayout()
-        self.date_label = QLabel(self.selected_date.toString("dddd, MMMM d"))
-        self.date_label.setStyleSheet("color: #e8eaed; font-size: 16px; font-weight: bold; background: transparent;")
+        self.date_label = QLabel(self.selected_date.toString("dddd, MMMM d").upper())
+        self.date_label.setStyleSheet("color: #c0c8d8; font-size: 14px; font-family: Consolas; font-weight: bold; background: transparent; letter-spacing: 1px;")
         header_layout.addWidget(self.date_label)
         header_layout.addStretch()
         
-        add_btn = PushButton("+")
+        add_btn = QPushButton("⊕")
         add_btn.setFixedSize(32, 32)
         add_btn.setCursor(Qt.PointingHandCursor)
-        # Custom styling for round button
         add_btn.setStyleSheet("""
             QPushButton { 
-                background: rgba(51, 181, 229, 0.1); 
-                color: #33b5e5; 
+                background: rgba(0, 212, 255, 0.1); 
+                color: #00d4ff; 
                 border-radius: 16px; 
-                border: 1px solid #33b5e5; 
+                border: 1px solid rgba(0, 212, 255, 0.4); 
                 font-size: 18px; 
                 font-weight: bold;
             }
             QPushButton:hover { 
-                background: rgba(51, 181, 229, 0.2); 
+                background: rgba(0, 212, 255, 0.25); 
+                border: 1px solid #00d4ff;
             }
         """)
         add_btn.clicked.connect(self._show_add_event_dialog)
@@ -132,26 +126,19 @@ class ScheduleComponent(QWidget):
         
         # --- Fluent Calendar View ---
         self.calendar = CalendarView()
-        # Prevent auto-hide (it assumes popup behavior)
         self.calendar.hide = lambda: None
         self.calendar.close = lambda: None
-        
-        # Connect date changed signal
         self.calendar.dateChanged.connect(self._on_date_selected)
-        
-        # Style overrides usually handled by global theme, but we can enforce some if needed
-        # Fluent CalendarView generally looks good in dark mode.
         
         layout.addWidget(self.calendar, 1)
 
     def _on_date_selected(self, date):
         self.selected_date = date
-        self.date_label.setText(date.toString("dddd, MMMM d"))
+        self.date_label.setText(date.toString("dddd, MMMM d").upper())
         self.refresh_events()
         
     def refresh_events(self):
-        """Clear timeline and load events for selected date."""
-        while self.timeline_layout.count() > 1: # Keep stretch
+        while self.timeline_layout.count() > 1: 
             item = self.timeline_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
@@ -160,9 +147,9 @@ class ScheduleComponent(QWidget):
         events = calendar_manager.get_events(date_str)
         
         if not events:
-            empty = QLabel("No events scheduled")
+            empty = QLabel("NO EVENTS DETECTED")
             empty.setAlignment(Qt.AlignCenter)
-            empty.setStyleSheet("color: #8b9bb4; padding: 20px; font-style: italic;")
+            empty.setStyleSheet("color: #6b7a95; padding: 20px; font-family: Consolas; letter-spacing: 2px;")
             self.timeline_layout.insertWidget(0, empty)
         else:
             for event in events:
@@ -173,18 +160,19 @@ class ScheduleComponent(QWidget):
         card.setCursor(Qt.PointingHandCursor)
         
         cat = event['category']
-        accent_color = "#33b5e5" if "WORK" in cat else "#00c853" if "PERSONAL" in cat else "#aa66cc"
+        # JARVIS Palette Mapping
+        accent_color = "#00d4ff" if "DIRECTIVE" in cat else "#ffd700" if "PERSONAL" in cat else "#aa66cc"
         
         card.setStyleSheet(f"""
             QFrame {{
-                background-color: #111625;
+                background-color: rgba(0, 212, 255, 0.03);
                 border-radius: 8px;
-                border: 1px solid #1a2236;
+                border: 1px solid rgba(0, 212, 255, 0.1);
                 border-left: 3px solid {accent_color};
             }}
             QFrame:hover {{ 
-                background-color: #1a2236;
-                border: 1px solid {accent_color};
+                background-color: rgba(0, 212, 255, 0.08);
+                border: 1px solid rgba(0, 212, 255, 0.3);
             }}
         """)
         
@@ -196,20 +184,20 @@ class ScheduleComponent(QWidget):
         time_str = start_dt.strftime("%I:%M %p").lstrip("0")
         
         time_lbl = QLabel(time_str)
-        time_lbl.setStyleSheet(f"color: {accent_color}; font-weight: bold; font-size: 13px; background: transparent; border: none;")
-        time_lbl.setFixedWidth(65)
+        time_lbl.setStyleSheet(f"color: {accent_color}; font-weight: bold; font-family: Consolas; font-size: 13px; background: transparent; border: none;")
+        time_lbl.setFixedWidth(75)
         layout.addWidget(time_lbl)
         
         # Details
         details = QVBoxLayout()
         details.setSpacing(4)
         
-        title_lbl = QLabel(event['title'])
-        title_lbl.setStyleSheet("color: #e8eaed; font-weight: 500; font-size: 14px; background: transparent; border: none;")
+        title_lbl = QLabel(event['title'].upper())
+        title_lbl.setStyleSheet("color: #c0c8d8; font-weight: 600; font-family: Consolas; font-size: 13px; background: transparent; border: none; letter-spacing: 1px;")
         details.addWidget(title_lbl)
         
         cat_lbl = QLabel(cat)
-        cat_lbl.setStyleSheet(f"color: {accent_color}; font-size: 10px; background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px; border: none;")
+        cat_lbl.setStyleSheet(f"color: {accent_color}; font-size: 10px; font-family: Consolas; letter-spacing: 1px; background: rgba(255,255,255,0.05); padding: 3px 6px; border-radius: 4px; border: none;")
         cat_lbl.setFixedWidth(cat_lbl.sizeHint().width() + 15)
         details.addWidget(cat_lbl)
         
@@ -220,8 +208,8 @@ class ScheduleComponent(QWidget):
         del_btn = QPushButton("×")
         del_btn.setFixedSize(24, 24)
         del_btn.setStyleSheet("""
-            QPushButton { color: #6e6e6e; background: transparent; font-size: 18px; border: none; border-radius: 12px; }
-            QPushButton:hover { background: rgba(239, 83, 80, 0.2); color: #ef5350; }
+            QPushButton { color: #6b7a95; background: transparent; font-size: 18px; border: none; border-radius: 12px; }
+            QPushButton:hover { background: rgba(255, 59, 48, 0.2); color: #ff3b30; }
         """)
         del_btn.clicked.connect(lambda: self._delete_event(event['id']))
         layout.addWidget(del_btn)
@@ -233,7 +221,6 @@ class ScheduleComponent(QWidget):
         self.refresh_events()
         
     def _show_add_event_dialog(self):
-        """Show dialog to create a new event."""
         w = AddEventDialog(self.window())
         if w.exec():
             title, start, end, cat = w.get_data()

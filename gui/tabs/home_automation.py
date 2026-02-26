@@ -10,9 +10,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, QThread
 from PySide6.QtGui import QColor
 from qfluentwidgets import (
-    TitleLabel, BodyLabel,
-    FluentIcon as FIF, IconWidget, SwitchButton, Slider,
-    ColorPickerButton, ToolButton
+    FluentIcon as FIF, IconWidget, SwitchButton, Slider, ColorPickerButton
 )
 
 from core.kasa_control import kasa_manager
@@ -22,13 +20,11 @@ _CYAN   = "#00d4ff"
 _GOLD   = "#ffd700"
 _RED    = "#ff3b30"
 _BG     = "#050a12"
-_CARD   = "#0a1628"
+_CARD   = "rgba(10, 22, 40, 0.85)" # Fixed glassmorphism
 _CARD2  = "#0d1f3c"
 _TEXT   = "#c0c8d8"
-_MUTED  = "#6b7a95"
+_MUTED  = "#8b9bb4" # Inclusive
 
-
-# ── Threads (unchanged logic) ─────────────────────────────────────────────────
 
 class DataFetchThread(QThread):
     devices_found = Signal(list)
@@ -81,12 +77,7 @@ class ActionThread(QThread):
             self.finished.emit(False)
 
 
-# ── Device Card ───────────────────────────────────────────────────────────────
-
 class DeviceCard(QFrame):
-    """
-    Glassmorphism JARVIS device card.
-    """
     def __init__(self, device_info, parent=None):
         super().__init__(parent)
         self.device_info = device_info
@@ -97,7 +88,6 @@ class DeviceCard(QFrame):
 
         self.setFixedSize(300, 165)
 
-        # Card style — cyan when on, muted when off
         self._on_style = f"""
             QFrame {{
                 background-color: {_CARD};
@@ -108,7 +98,7 @@ class DeviceCard(QFrame):
         """
         self._off_style = f"""
             QFrame {{
-                background-color: #080f1e;
+                background-color: rgba(8, 15, 30, 0.85);
                 border: 1px solid rgba(0, 212, 255, 0.08);
                 border-top: 1px solid rgba(0, 212, 255, 0.20);
                 border-radius: 18px;
@@ -116,7 +106,6 @@ class DeviceCard(QFrame):
         """
         self.setStyleSheet(self._on_style if is_on else self._off_style)
 
-        # HUD corners
         self._corners = HUDCornerWidget(300, 165, QColor(_CYAN), 14, self)
         self._corners.raise_()
 
@@ -124,11 +113,9 @@ class DeviceCard(QFrame):
         layout.setContentsMargins(18, 16, 18, 14)
         layout.setSpacing(0)
 
-        # ── Header row ────────────────────────────────────────────────
         header = QHBoxLayout()
         header.setSpacing(10)
 
-        # Icon
         icon_type = FIF.BRIGHTNESS if self.is_bulb else FIF.TILES
         ib = QFrame()
         ib.setFixedSize(38, 38)
@@ -148,7 +135,6 @@ class DeviceCard(QFrame):
         header.addWidget(ib)
         header.addStretch()
 
-        # Toggle
         self.toggle = SwitchButton()
         self.toggle.setChecked(is_on)
         self.toggle.checkedChanged.connect(self._on_toggle)
@@ -156,20 +142,18 @@ class DeviceCard(QFrame):
         layout.addLayout(header)
         layout.addSpacing(10)
 
-        # ── Device name ───────────────────────────────────────────────
         name = QLabel(device_info['alias'].upper())
         name.setStyleSheet(
-            f"color: {_TEXT}; font-weight: 700; font-size: 13px; "
+            f"color: {_TEXT}; font-weight: 700; font-size: 14px; "
             "letter-spacing: 1px; font-family: Consolas;"
         )
         layout.addWidget(name)
 
-        # Status row
         status_row = QHBoxLayout()
         self._orb = PulseOrb(8, QColor(_CYAN) if is_on else QColor(_MUTED))
         self._status_lbl = QLabel("ONLINE" if is_on else "STANDBY")
         self._status_lbl.setStyleSheet(
-            f"color: {_CYAN if is_on else _MUTED}; font-size: 10px; "
+            f"color: {_CYAN if is_on else _MUTED}; font-size: 11px; "
             "font-family: Consolas; letter-spacing: 2px;"
         )
         status_row.addWidget(self._orb)
@@ -181,7 +165,6 @@ class DeviceCard(QFrame):
         layout.addWidget(HUDDivider(opacity=0.2))
         layout.addSpacing(8)
 
-        # ── Controls ──────────────────────────────────────────────────
         ctrl = QHBoxLayout()
         ctrl.setSpacing(10)
 
@@ -205,12 +188,11 @@ class DeviceCard(QFrame):
             layout.addStretch()
 
     def _set_state(self, is_on: bool):
-        """Update card visual state."""
         self.setStyleSheet(self._on_style if is_on else self._off_style)
         self._orb.set_color(QColor(_CYAN) if is_on else QColor(_MUTED))
         self._status_lbl.setText("ONLINE" if is_on else "STANDBY")
         self._status_lbl.setStyleSheet(
-            f"color: {_CYAN if is_on else _MUTED}; font-size: 10px; "
+            f"color: {_CYAN if is_on else _MUTED}; font-size: 11px; "
             "font-family: Consolas; letter-spacing: 2px;"
         )
 
@@ -234,8 +216,6 @@ class DeviceCard(QFrame):
         self._worker_c = t
 
 
-# ── Room filter buttons ───────────────────────────────────────────────────────
-
 def _filter_btn_style(active: bool) -> str:
     if active:
         return f"""
@@ -246,7 +226,7 @@ def _filter_btn_style(active: bool) -> str:
                 border-radius: 14px;
                 padding: 7px 18px;
                 font-weight: 700;
-                font-size: 11px;
+                font-size: 12px;
                 font-family: Consolas;
                 letter-spacing: 1px;
             }}
@@ -259,7 +239,7 @@ def _filter_btn_style(active: bool) -> str:
             border-radius: 14px;
             padding: 7px 18px;
             font-weight: 600;
-            font-size: 11px;
+            font-size: 12px;
             font-family: Consolas;
             letter-spacing: 1px;
         }}
@@ -269,13 +249,7 @@ def _filter_btn_style(active: bool) -> str:
         }}
     """
 
-
-# ── Main Tab ──────────────────────────────────────────────────────────────────
-
 class HomeAutomationTab(QWidget):
-    """
-    JARVIS Environmental Control Dashboard.
-    """
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("homeAutomationView")
@@ -291,7 +265,6 @@ class HomeAutomationTab(QWidget):
         self._setup_header(main)
         self._setup_filters(main)
 
-        # Device grid scroll area
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setStyleSheet("background: transparent; border: none;")
@@ -305,7 +278,6 @@ class HomeAutomationTab(QWidget):
         self.scroll.setWidget(self.grid_widget)
         main.addWidget(self.scroll)
 
-        # Load
         if kasa_manager.devices:
             self._on_devices_loaded(list(kasa_manager.devices.values()))
         else:
@@ -323,30 +295,31 @@ class HomeAutomationTab(QWidget):
             "letter-spacing: 3px; font-family: Consolas;"
         )
         sub = QLabel("Localized automation interface · Kasa network")
-        sub.setStyleSheet(f"color: {_MUTED}; font-size: 13px;")
+        sub.setStyleSheet(f"color: {_MUTED}; font-size: 14px;")
         col.addWidget(title)
         col.addWidget(sub)
 
         row.addLayout(col)
         row.addStretch()
 
-        refresh_btn = ToolButton(FIF.SYNC, self)
-        refresh_btn.setToolTip("Refresh Devices")
+        refresh_btn = QPushButton(" SYNC NODES")
         refresh_btn.clicked.connect(self._load_devices)
         refresh_btn.setStyleSheet(f"""
-            ToolButton {{
-                background-color: rgba(0, 212, 255, 0.07);
-                border: 1px solid rgba(0, 212, 255, 0.2);
+            QPushButton {{
+                background-color: rgba(0, 212, 255, 0.1);
+                color: {_CYAN};
+                border: 1px solid rgba(0, 212, 255, 0.4);
                 border-radius: 8px;
+                padding: 8px 16px;
+                font-family: Consolas;
+                font-weight: bold;
+                letter-spacing: 1px;
             }}
-            ToolButton:hover {{
-                background-color: rgba(0, 212, 255, 0.14);
-            }}
+            QPushButton:hover {{ background-color: rgba(0, 212, 255, 0.2); }}
         """)
         row.addWidget(refresh_btn)
         row.addSpacing(12)
 
-        # Status badge
         self._status_badge = QLabel("◉  SCANNING")
         self._status_badge.setStyleSheet(f"""
             color: {_CYAN};
@@ -355,7 +328,7 @@ class HomeAutomationTab(QWidget):
             border-radius: 14px;
             padding: 7px 16px;
             font-weight: 700;
-            font-size: 11px;
+            font-size: 12px;
             font-family: Consolas;
             letter-spacing: 2px;
         """)
@@ -370,7 +343,6 @@ class HomeAutomationTab(QWidget):
         parent.addLayout(self.filter_row)
 
     def _update_filters(self):
-        # Clear existing
         while self.filter_row.count():
             item = self.filter_row.takeAt(0)
             if item.widget():
@@ -392,13 +364,11 @@ class HomeAutomationTab(QWidget):
         self.filter_row.addStretch()
 
     def _filter_grid(self, room_name: str, clicked_btn=None):
-        # Update button styles
         for btn in self._filter_btns:
             active = (btn is clicked_btn)
             btn.setChecked(active)
             btn.setStyleSheet(_filter_btn_style(active))
 
-        # Clear grid
         for i in reversed(range(self.grid_layout.count())):
             w = self.grid_layout.itemAt(i).widget()
             if w:
@@ -449,7 +419,7 @@ class HomeAutomationTab(QWidget):
                 self.room_groups.setdefault("Other", []).append(dev)
 
         n = len(devices)
-        self._status_badge.setText(f"◉  {n} DEVICE{'S' if n != 1 else ''} ONLINE")
+        self._status_badge.setText(f"◉  {n} NODE{'S' if n != 1 else ''} ONLINE")
 
         self._update_filters()
         self._filter_grid("All", self._filter_btns[0] if self._filter_btns else None)

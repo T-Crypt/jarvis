@@ -1,26 +1,23 @@
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QVBoxLayout, QLabel, 
-    QListWidgetItem, QSizePolicy, QWidget, QScrollArea
+    QListWidgetItem, QSizePolicy, QWidget, QPushButton
 )
 from PySide6.QtCore import Qt, QSize
+from PySide6.QtGui import QColor
 
 from qfluentwidgets import (
-    LineEdit, ListWidget, CheckBox, PushButton, 
-    TransparentToolButton, FluentIcon as FIF,
-    CardWidget, HeaderCardWidget, BodyLabel, TitleLabel,
-    StrongBodyLabel
+    LineEdit, ListWidget, CheckBox, TransparentToolButton, FluentIcon as FIF
 )
 
 from gui.components.schedule import ScheduleComponent
 from gui.components.timer import TimerComponent
 from gui.components.alarm import AlarmComponent
 from core.tasks import task_manager
-
+from gui.components.jarvis_hud import HUDCornerWidget, HUDDivider, PulseOrb
 
 class PlannerTab(QFrame):
     """
-    Planner functionality: Focus Tasks, Schedule, and Flow State tools.
-    Refined for Aura Theme.
+    JARVIS Strategic Planner & Timeline.
     """
     
     def __init__(self):
@@ -38,47 +35,49 @@ class PlannerTab(QFrame):
         planner_layout.setContentsMargins(30, 30, 30, 30)
         planner_layout.setSpacing(25)
         
-        # --- Column 1: Focus Tasks (HeaderCardWidget) ---
-        tasks_col = HeaderCardWidget("Focus Tasks")
-        tasks_col.setBorderRadius(12)
+        # ── Column 1: Focus Tasks (HUD Frame) ─────────────────────────
+        tasks_col = QFrame()
+        tasks_col.setStyleSheet("""
+            QFrame {
+                background-color: rgba(10, 22, 40, 0.85);
+                border: 1px solid rgba(0, 212, 255, 0.15);
+                border-top: 1px solid rgba(0, 212, 255, 0.45);
+                border-radius: 14px;
+            }
+        """)
+        self._tasks_corners = HUDCornerWidget(0, 0, QColor("#00d4ff"), 18, tasks_col)
         
-        # Add Input to header area or top of content? 
-        # HeaderCardWidget usually has title. Let's put input inside content.
-        
-        tasks_layout = QVBoxLayout(tasks_col.viewLayout.parentWidget()) 
-        # Note: HeaderCardWidget has .viewLayout which is the content layout
-        # But to access it we usually just add widgets to the Card/view.
-        # Actually HeaderCardWidget inherits from CardWidget but adds a header.
-        # The content area is populated via styling or adding to layout.
-        # Let's check docs or usage. Commonly: widget.viewLayout.addWidget(...)
-        
-        # Wait, HeaderCardWidget in qfluentwidgets might treat children differently.
-        # It's safer to use the layout directly if accessible, or add to self.
-        
-        t_layout = QVBoxLayout()
-        t_layout.setContentsMargins(20, 20, 20, 20)
+        t_layout = QVBoxLayout(tasks_col)
+        t_layout.setContentsMargins(25, 25, 25, 25)
         t_layout.setSpacing(15)
         
-        # New Task Input
+        t_header = QHBoxLayout()
+        t_title = QLabel("CURRENT OBJECTIVES")
+        t_title.setStyleSheet("color: #00d4ff; font-family: Consolas; font-weight: 700; font-size: 14px; letter-spacing: 2px; border: none; background: transparent;")
+        t_header.addWidget(PulseOrb(8, QColor("#00d4ff")))
+        t_header.addWidget(t_title)
+        t_header.addStretch()
+        t_layout.addLayout(t_header)
+        t_layout.addWidget(HUDDivider(opacity=0.3))
+        
         self.task_input = LineEdit()
-        self.task_input.setPlaceholderText("Add objective...")
+        self.task_input.setPlaceholderText("Append new objective...")
         self.task_input.returnPressed.connect(self._add_task)
         self.task_input.setClearButtonEnabled(True)
+        self.task_input.setStyleSheet("font-family: Consolas; font-size: 13px;")
         t_layout.addWidget(self.task_input)
         
-        # Task Lists (Active)
         self.task_list = ListWidget()
         self.task_list.setStyleSheet("background: transparent; border: none;")
-        t_layout.addWidget(self.task_list, 1) # Stretch to fill
+        t_layout.addWidget(self.task_list, 1) 
         
-        # Completed Section
         header_layout = QHBoxLayout()
         self.completed_header_btn = TransparentToolButton(FIF.CHEVRON_RIGHT)
         self.completed_header_btn.clicked.connect(self._toggle_completed_section)
         header_layout.addWidget(self.completed_header_btn)
         
-        self.completed_label = BodyLabel("Completed 0")
-        self.completed_label.setStyleSheet("color: #8b9bb4;")
+        self.completed_label = QLabel("ARCHIVED OBJECTIVES: 0")
+        self.completed_label.setStyleSheet("color: #8b9bb4; font-family: Consolas; font-size: 12px; letter-spacing: 1px; border: none; background: transparent;")
         header_layout.addWidget(self.completed_label)
         header_layout.addStretch()
         
@@ -89,25 +88,37 @@ class PlannerTab(QFrame):
         self.completed_list.setVisible(False)
         t_layout.addWidget(self.completed_list)
         
-        tasks_col.viewLayout.addLayout(t_layout)
-        
         planner_layout.addWidget(tasks_col, 1)
         
-        # --- Column 2: Schedule (HeaderCardWidget) ---
-        schedule_col = HeaderCardWidget("Timeline")
-        schedule_col.setBorderRadius(12)
+        # ── Column 2: Schedule (HUD Frame) ────────────────────────────
+        schedule_col = QFrame()
+        schedule_col.setStyleSheet("""
+            QFrame {
+                background-color: rgba(10, 22, 40, 0.85);
+                border: 1px solid rgba(0, 212, 255, 0.15);
+                border-top: 1px solid rgba(0, 212, 255, 0.45);
+                border-radius: 14px;
+            }
+        """)
+        self._sched_corners = HUDCornerWidget(0, 0, QColor("#00d4ff"), 18, schedule_col)
         
-        s_layout = QVBoxLayout()
-        s_layout.setContentsMargins(0, 0, 0, 0)
+        s_layout = QVBoxLayout(schedule_col)
+        s_layout.setContentsMargins(25, 25, 25, 25)
+        
+        s_header = QHBoxLayout()
+        s_title = QLabel("SYSTEM TIMELINE")
+        s_title.setStyleSheet("color: #00d4ff; font-family: Consolas; font-weight: 700; font-size: 14px; letter-spacing: 2px; border: none; background: transparent;")
+        s_header.addWidget(s_title)
+        s_header.addStretch()
+        s_layout.addLayout(s_header)
+        s_layout.addWidget(HUDDivider(opacity=0.3))
         
         self.schedule_component = ScheduleComponent()
         s_layout.addWidget(self.schedule_component)
         
-        schedule_col.viewLayout.addLayout(s_layout)
-        
         planner_layout.addWidget(schedule_col, 1)
         
-        # --- Column 3: Performance Timers ---
+        # ── Column 3: Performance Timers ──────────────────────────────
         flow_col = QFrame()
         flow_col.setFixedWidth(320)
         flow_col.setStyleSheet("background: transparent; border: none;")
@@ -115,36 +126,37 @@ class PlannerTab(QFrame):
         flow_layout.setContentsMargins(0, 0, 0, 0)
         flow_layout.setSpacing(25)
         
-        # Performance Header
-        p_title = StrongBodyLabel("Performance Timers")
-        p_title.setStyleSheet("color: #e8eaed; font-size: 14px;")
+        p_title = QLabel("PERFORMANCE METRICS")
+        p_title.setStyleSheet("color: #00d4ff; font-family: Consolas; font-weight: bold; font-size: 14px; letter-spacing: 2px;")
         flow_layout.addWidget(p_title)
         
-        # Timer
         self.timer_component = TimerComponent()
-        # Ensure it has a Card-like container if it doesn't already
         flow_layout.addWidget(self.timer_component)
         
-        # Alarm
         self.alarm_component = AlarmComponent() 
         flow_layout.addWidget(self.alarm_component)
         
         flow_layout.addStretch()
-        
         planner_layout.addWidget(flow_col)
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        # Assuming children index based on layout
+        cols = self.findChildren(QFrame)
+        if len(cols) >= 2:
+            self._tasks_corners.resize(cols[0].width(), cols[0].height())
+            self._sched_corners.resize(cols[1].width(), cols[1].height())
+
     def _load_tasks(self):
-        """Load tasks from persistent storage."""
         tasks = task_manager.get_tasks()
         self.task_list.clear()
-        self.completed_list.clear() # Fix duplication bug
+        self.completed_list.clear() 
         for task in tasks:
             self._create_task_item(task)
             
         self._update_task_counter()
         
     def _add_task(self):
-        """Add a new task from the input field."""
         if hasattr(self, 'task_input'):
             task_text = self.task_input.text().strip()
             if task_text:
@@ -152,84 +164,58 @@ class PlannerTab(QFrame):
                 self.task_input.clear()
     
     def _add_task_from_text(self, task_text):
-        """Internal helper to add task."""
-        # Save to DB
         new_task = task_manager.add_task(task_text)
         if new_task:
             self._create_task_item(new_task)
         self._update_task_counter()
     
     def _on_task_checked(self, state: int, item: QListWidgetItem, source_list: ListWidget):
-        """Handle task checkbox state change - move between lists."""
         widget = source_list.itemWidget(item)
-        if not widget:
-            return
-            
-        # Get task ID from data
+        if not widget: return
         task_id = item.data(Qt.UserRole)
-        
-        # Get task text from label
-        # We need to find the BodyLabel inside
-        label = widget.findChild(BodyLabel)
-        if not label:
-            # Fallback if using QLabel
-            label = widget.findChild(QLabel)
-            
-        if not label:
-            return
+        label = widget.findChild(QLabel)
+        if not label: return
         
         task_text = label.text()
         row = source_list.row(item)
         is_completed = (state == Qt.Checked.value)
         
-        # Update persistence
         task_manager.toggle_task(task_id, is_completed)
-        
-        # Start transition
         source_list.takeItem(row)
         
-        # Re-create in correct list
         task_data = {"id": task_id, "text": task_text, "completed": is_completed}
         self._create_task_item(task_data)
-        
         self._update_task_counter()
     
     def _create_task_item(self, task_data: dict):
-        """Create a task item widget and add to appropriate list."""
         completed = task_data.get('completed', False)
         text = task_data.get('text', '')
         task_id = task_data.get('id')
         
         target_list = self.completed_list if completed else self.task_list
-        
         item = QListWidgetItem()
         item.setSizeHint(QSize(0, 50))
-        item.setData(Qt.UserRole, task_id)  # Store ID
+        item.setData(Qt.UserRole, task_id)
         
         task_widget = QWidget()
         task_layout = QHBoxLayout(task_widget)
         task_layout.setContentsMargins(10, 5, 10, 5)
         task_layout.setSpacing(12)
         
-        # Checkbox
         checkbox = CheckBox()
         checkbox.setChecked(completed)
-        # Fix lambda binding
         checkbox.stateChanged.connect(lambda state, i=item, l=target_list: self._on_task_checked(state, i, l))
         task_layout.addWidget(checkbox)
         
-        # Task label
-        task_label = BodyLabel(text)
+        task_label = QLabel(text)
         if completed:
-            # Strikethrough style
-            task_label.setStyleSheet("color: #8a8a8a; text-decoration: line-through;")
+            task_label.setStyleSheet("color: #8b9bb4; text-decoration: line-through; font-family: 'Segoe UI'; font-size: 14px; background: transparent;")
         else:
-            task_label.setStyleSheet("color: #e8eaed;") 
+            task_label.setStyleSheet("color: #c0c8d8; font-family: 'Segoe UI'; font-size: 14px; background: transparent;") 
             
         task_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         task_layout.addWidget(task_label, 1)
         
-        # Delete button
         delete_btn = TransparentToolButton(FIF.DELETE)
         delete_btn.clicked.connect(lambda: self._delete_task(item, target_list))
         task_layout.addWidget(delete_btn)
@@ -238,10 +224,8 @@ class PlannerTab(QFrame):
         target_list.setItemWidget(item, task_widget)
     
     def _delete_task(self, item: QListWidgetItem, source_list: ListWidget = None):
-        """Delete a task from the list."""
         if source_list is None:
             source_list = self.task_list
-            
         task_id = item.data(Qt.UserRole)
         task_manager.delete_task(task_id)
         
@@ -251,16 +235,13 @@ class PlannerTab(QFrame):
             self._update_task_counter()
     
     def _toggle_completed_section(self):
-        """Toggle the completed tasks section visibility."""
         self.completed_expanded = not self.completed_expanded
         self.completed_list.setVisible(self.completed_expanded)
-        
         if self.completed_expanded:
             self.completed_header_btn.setIcon(FIF.CHEVRON_DOWN_MED)
         else:
             self.completed_header_btn.setIcon(FIF.CHEVRON_RIGHT)
     
     def _update_task_counter(self):
-        """Update the task counter label and completed header."""
         completed_count = self.completed_list.count()
-        self.completed_label.setText(f"Completed {completed_count}")
+        self.completed_label.setText(f"ARCHIVED OBJECTIVES: {completed_count}")

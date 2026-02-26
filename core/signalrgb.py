@@ -15,22 +15,23 @@ from typing import Optional
 from config import GREEN, YELLOW, RESET
 
 # Canonical effect names → exact URL slug used by SignalRGB
-# Spaces become % in the URL scheme (not %20)
+# Spaces become %20 in the URL scheme
 EFFECT_MAP = {
     "sakura":          "Sakura",
     "hydrogen":        "Hydrogen",
-    "black ice":       "Black%Ice",
-    "spiral rainbow":  "Spiral%Rainbow",
+    "black ice":       "Black%20Ice",
+    "spiral rainbow":  "Spiral%20Rainbow",
     "coral":           "Coral",
-    "neon fire":       "Neon%Fire",
-    "emerald dream":   "Emerald%Dream",
-    "rainbow rise":    "Rainbow%Rise",
+    "neon fire":       "Neon%20Fire",
+    "neon shift":      "Neon%20Shift",
+    "emerald dream":   "Emerald%20Dream",
+    "rainbow rise":    "Rainbow%20Rise",
     "spin":            "Spin",
     "enigma":          "Enigma",
     "corrosive":       "Corrosive",
-    "pixel fill":      "Pixel%Fill",
-    "cyber rain":      "Cyber%Rain",
-    "fire and ice":    "Fire%And%Ice",
+    "pixel fill":      "Pixel%20Fill",
+    "cyber rain":      "Cyber%20Rain",
+    "fire and ice":    "Fire%20And%20Ice",
 }
 
 
@@ -101,8 +102,8 @@ class SignalRGBController:
                 return slug
 
         # Last resort: encode it directly (for effects added later)
-        # Replace spaces with % to match SignalRGB's URL scheme
-        encoded = effect_name.strip().replace(" ", "%")
+        # Replace spaces with %20 to match SignalRGB's URL encoding
+        encoded = effect_name.strip().replace(" ", "%20")
         if encoded:
             return encoded
 
