@@ -8,8 +8,9 @@
 
 > 🔒 **Your data stays on your machine.** No API keys required for core functionality. No subscriptions. No data collection.
 
----
-![Jarvis Preview](src/jarvis.mp4)
+### 🎬 JARVIS System Interface in Action
+
+<video src="https://github.com/T-Crypt/jarvis/raw/main/src/jarvis.mp4" width="100%" controls="controls" muted="muted"></video>
 ---
 
 ## ✨ Key Features
