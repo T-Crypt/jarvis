@@ -125,6 +125,10 @@ class BriefingView(QWidget):
         self.load_news(use_ai=False)
 
     def load_news(self, use_ai=True):
+        # SAFETY GUARD
+        if hasattr(self, 'thread') and self.thread and self.thread.isRunning():
+            return
+            
         if use_ai:
             self.bk_text.setText("Syncing global sources & Curating with AI...")
         else:

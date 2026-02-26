@@ -10,9 +10,9 @@ HF_ROUTER_REPO = "nlouis/pocket-ai-router"  # Hugging Face repo for auto-downloa
 MAX_HISTORY = 20
 
 # --- TTS Configuration ---
-TTS_VOICE_MODEL = "en_US-ryan-high"
-TTS_MODEL_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/high/en_US-ryan-high.onnx"
-TTS_CONFIG_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/high/en_US-ryan-high.onnx.json"
+TTS_VOICE_MODEL = "en_GB-jarvis-high"
+TTS_MODEL_URL = "https://huggingface.co/jgkawell/jarvis/resolve/main/en/en_GB/jarvis/high/jarvis-high.onnx"
+TTS_CONFIG_URL = "https://huggingface.co/jgkawell/jarvis/resolve/main/en/en_GB/jarvis/high/jarvis-high.onnx.json"
 
 # --- STT Configuration ---
 # Using RealTimeSTT for real-time speech-to-text
@@ -33,6 +33,11 @@ STT_RECORD_TIMEOUT = 5.0  # Maximum seconds to record after wake word
 # --- SignalRGB Configuration ---
 SIGNALRGB_ENABLED = True
 SIGNALRGB_BASE_URL = "http://localhost:16038"
+
+# --- Spotify Configuration ---
+SPOTIFY_CLIENT_ID = "your_client_id_here"
+SPOTIFY_CLIENT_SECRET = "your_client_secret_here"
+SPOTIFY_REDIRECT_URI = "http://localhost:8888/callback"
 
 # --- Voice Assistant Configuration ---
 VOICE_ASSISTANT_ENABLED = True

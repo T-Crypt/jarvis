@@ -283,8 +283,13 @@ class JARVISHeader(QWidget):
         self.clock_lbl.setText(QTime.currentTime().toString("h:mm AP"))
 
     def _fetch_weather(self):
+        # SAFETY GUARD
+        if hasattr(self, '_wx_worker') and self._wx_worker and self._wx_worker.isRunning():
+            return
+            
         self._wx_worker = WeatherWorker()
         self._wx_worker.finished.connect(self._on_weather)
+        self._wx_worker.finished.connect(self._wx_worker.deleteLater)
         self._wx_worker.start()
 
     def _on_weather(self, data):
