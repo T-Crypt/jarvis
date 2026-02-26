@@ -26,3 +26,6 @@ venv/
 # VSCode / IDE files
 .vscode/
 .idea/
+
+# Images
+src/

@@ -1,184 +1,91 @@
+"""
+JARVIS Dashboard — Iron Man HUD aesthetic.
+
+Replaces the Aura-themed dashboard with full JARVIS glassmorphism:
+  - Arc reactor header widget
+  - Scan-line animation on the intelligence feed
+  - HUD corner brackets on all cards
+  - Pulse orbs for live status
+  - Gold priority card with gradient
+"""
+
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, 
-    QScrollArea, QGridLayout, QPushButton
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
+    QScrollArea, QGridLayout, QPushButton, QSizePolicy
 )
-from PySide6.QtCore import Qt, QTimer, QDate, QTime, QSize, Signal, QThread
-from PySide6.QtGui import QFont, QColor
+from PySide6.QtCore import Qt, QTimer, QDate, QTime, QThread, Signal
+from PySide6.QtGui import QFont, QColor, QPainter, QPen, QLinearGradient, QBrush
 
 from qfluentwidgets import (
-    CardWidget, TitleLabel, BodyLabel, StrongBodyLabel, 
-    FluentIcon as FIF, IconWidget, TransparentToolButton,
-    SimpleCardWidget, ImageLabel, PillToolButton
+    CardWidget, BodyLabel, StrongBodyLabel,
+    FluentIcon as FIF, IconWidget, TransparentToolButton
 )
 
 from core.news import news_manager
 from core.tasks import task_manager
 from core.calendar_manager import calendar_manager
 from core.kasa_control import kasa_manager
-from datetime import datetime, timedelta
+from datetime import datetime
 import asyncio
 
-# --- Components ---
-
 from core.weather import weather_manager
+from gui.components.jarvis_hud import (
+    ArcReactorWidget, ScanLineWidget, HUDCornerWidget,
+    PulseOrb, HUDDivider, DataTickerWidget, CYAN, GOLD, RED_ARC
+)
 
-class GreetingsHeader(QWidget):
+
+# ── Palette ──────────────────────────────────────────────────────────────────
+_CYAN   = "#00d4ff"
+_GOLD   = "#ffd700"
+_RED    = "#ff3b30"
+_BG     = "#050a12"
+_CARD   = "#0a1628"
+_CARD2  = "#0d1f3c"
+_TEXT   = "#c0c8d8"
+_MUTED  = "#6b7a95"
+_BORDER = "rgba(0, 212, 255, 0.15)"
+
+
+# ── Reusable card base ────────────────────────────────────────────────────────
+
+class HUDCard(QFrame):
     """
-    Header showing "Good [Morning/Afternoon/Evening]" and Bubbles (Time | Weather).
+    Base card with cyan top-border accent and optional HUD corner brackets.
     """
-    def __init__(self, parent=None):
+    def __init__(self, corner_size: int = 14, accent_color: str = _CYAN,
+                 parent=None):
         super().__init__(parent)
-        self.layout = QHBoxLayout(self)
-        self.layout.setContentsMargins(0, 0, 0, 20)
-        self.layout.setSpacing(15)
-        
-        # Text Block
-        text_layout = QVBoxLayout()
-        text_layout.setSpacing(2)
-        
-        self.sub_label = BodyLabel("Welcome back, User")
-        self.sub_label.setStyleSheet("color: #8b9bb4;")
-        
-        self.title_label = QLabel()
-        self.title_label.setStyleSheet("font-size: 42px; font-weight: bold; color: #33b5e5; font-family: 'Segoe UI', sans-serif;")
-        
-        self.date_label = BodyLabel()
-        self.date_label.setStyleSheet("color: #8b9bb4; font-size: 14px;")
-        
-        text_layout.addWidget(self.sub_label)
-        text_layout.addWidget(self.title_label)
-        text_layout.addWidget(self.date_label)
-        
-        self.layout.addLayout(text_layout)
-        self.layout.addStretch()
-        
-        # --- Bubbles Container ---
-        # We use a container to hold the two bubbles side-by-side or grouped
-        bubbles_layout = QHBoxLayout()
-        bubbles_layout.setSpacing(15)
-        
-        # 1. Time Bubble
-        self.time_bubble = QFrame()
-        self.time_bubble.setFixedSize(160, 100)
-        self.time_bubble.setStyleSheet("""
-            QFrame {
-                background-color: #0f1524;
-                border: 1px solid #1a2236;
-                border-radius: 20px;
-            }
+        self._corners = HUDCornerWidget(
+            self.width(), self.height(),
+            QColor(accent_color), corner_size, self
+        )
+        self._corners.lower()
+
+        border_hex = "rgba(0, 212, 255, 0.18)"
+        top_hex    = "rgba(0, 212, 255, 0.50)"
+        if accent_color == _GOLD:
+            border_hex = "rgba(255, 215, 0, 0.18)"
+            top_hex    = "rgba(255, 215, 0, 0.50)"
+        elif accent_color == _RED:
+            border_hex = "rgba(255, 59, 48, 0.20)"
+            top_hex    = "rgba(255, 59, 48, 0.55)"
+
+        self.setStyleSheet(f"""
+            QFrame {{
+                background-color: {_CARD};
+                border: 1px solid {border_hex};
+                border-top: 1px solid {top_hex};
+                border-radius: 14px;
+            }}
         """)
-        tb_layout = QVBoxLayout(self.time_bubble)
-        tb_layout.setAlignment(Qt.AlignCenter)
-        
-        self.clock_label = QLabel()
-        self.clock_label.setStyleSheet("color: #e8eaed; font-size: 28px; font-weight: bold;")
-        tb_layout.addWidget(self.clock_label)
-        
-        bubbles_layout.addWidget(self.time_bubble)
-        
-        # 2. Weather Bubble
-        self.weather_bubble = QFrame()
-        self.weather_bubble.setFixedSize(160, 100)
-        self.weather_bubble.setStyleSheet("""
-            QFrame {
-                background-color: #0f1524;
-                border: 1px solid #1a2236;
-                border-radius: 20px;
-            }
-        """)
-        wb_layout = QVBoxLayout(self.weather_bubble)
-        wb_layout.setAlignment(Qt.AlignCenter)
-        wb_layout.setSpacing(5)
-        
-        # Icon Area
-        # Using a label for emoji or IconWidget
-        self.w_icon_label = QLabel("☁️") # Default emoji
-        self.w_icon_label.setStyleSheet("font-size: 24px; background: transparent;")
-        self.w_icon_label.setAlignment(Qt.AlignCenter)
-        
-        self.temp_label = QLabel("--°F")
-        self.temp_label.setStyleSheet("color: #e8eaed; font-size: 18px; font-weight: bold;")
-        
-        self.cond_label = QLabel("Loading...")
-        self.cond_label.setStyleSheet("color: #8b9bb4; font-size: 12px;")
-        
-        wb_layout.addWidget(self.w_icon_label)
-        wb_layout.addWidget(self.temp_label)
-        wb_layout.addWidget(self.cond_label)
-        
-        bubbles_layout.addWidget(self.weather_bubble)
-        
-        self.layout.addLayout(bubbles_layout)
-        
-        # Timer
-        self._update_time()
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self._update_time)
-        self.timer.start(1000) 
-        
-        # Weather update (async would be better, but simple timer fits pattern)
-        # Fetch immediately then every 15 mins
-        self._fetch_weather()
-        self.w_timer = QTimer(self)
-        self.w_timer.timeout.connect(self._fetch_weather)
-        self.w_timer.start(900000) 
 
-    def _update_time(self):
-        now = datetime.now()
-        hour = now.hour
-        
-        if 5 <= hour < 12:
-            greeting = "Good Morning"
-        elif 12 <= hour < 18:
-            greeting = "Good Afternoon"
-        else:
-            greeting = "Good Evening"
-            
-        self.title_label.setText(greeting)
-        self.date_label.setText("📅 " + QDate.currentDate().toString("dddd, MMMM d"))
-        self.clock_label.setText(QTime.currentTime().toString("h:mm AP"))
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._corners.resize(self.width(), self.height())
 
-    def _fetch_weather(self):
-        # Run in thread to avoid freeze
-        self._thread = QThread()
-        self._worker = WeatherWorker()
-        self._worker.moveToThread(self._thread)
-        self._thread.started.connect(self._worker.run)
-        self._worker.finished.connect(self._on_weather_loaded)
-        self._worker.finished.connect(self._thread.quit)
-        self._worker.finished.connect(self._worker.deleteLater)
-        self._thread.finished.connect(self._thread.deleteLater)
-        self._thread.start()
 
-    def _on_weather_loaded(self, data):
-        if not data:
-            self.cond_label.setText("Offline")
-            return
-            
-        temp = data['temp']
-        code = data['code']
-        
-        self.temp_label.setText(f"{int(temp)}°F")
-        
-        # Mapping Code to Emoji/Text
-        # 0: Clear (☀️), 1-3: Cloud (☁️), 45+: Cloud/Fog, 51+: Rain (🌧️), 71+: Snow (❄️), 95+: Storm (⚡)
-        if code == 0:
-            icon, text = "☀️", "Clear"
-        elif code in [1, 2, 3]:
-            icon, text = "⛅", "Cloudy"
-        elif code in [45, 48]:
-            icon, text = "🌫️", "Foggy"
-        elif code in [51, 53, 55, 61, 63, 65]:
-            icon, text = "🌧️", "Rain"
-        elif code in [71, 73, 75, 85, 86]:
-            icon, text = "❄️", "Snow"
-        elif code >= 95:
-             icon, text = "⚡", "Storm"
-        else:
-             icon, text = "🌡️", "Unknown"
-             
-        self.w_icon_label.setText(icon)
-        self.cond_label.setText(text)
+# ── Greeting Header ──────────────────────────────────────────────────────────
 
 class WeatherWorker(QThread):
     finished = Signal(dict)
@@ -186,533 +93,767 @@ class WeatherWorker(QThread):
         data = weather_manager.get_weather()
         self.finished.emit(data or {})
 
-class StatCard(CardWidget):
-    """
-    Square/Rectangular card for quick stats (Agenda, Devices, etc).
-    Clickable - emits navigate_requested signal with route_key for navigation.
-    """
-    navigate_requested = Signal(str)
-    
-    def __init__(self, icon: FIF, title: str, count: str, route_key: str = None, parent=None):
-        super().__init__(parent)
-        self.setFixedSize(280, 110)
-        self.setBorderRadius(16)
-        self.route_key = route_key
-        if route_key:
-            self.setCursor(Qt.PointingHandCursor)
-        
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(20, 20, 25, 20)
-        
-        # Left Side: Icon + Title
-        left = QVBoxLayout()
-        left.setSpacing(15)
-        
-        # Icon bubble
-        icon_bubble = QLabel()
-        icon_bubble.setFixedSize(40, 40)
-        icon_bubble.setAlignment(Qt.AlignCenter)
-        # Using a QFrame approach or just styling the label
-        # Since I can't easily embed FluentIcon in stylesheet, use IconWidget in a container
-        
-        ib_container = QFrame()
-        ib_container.setFixedSize(40, 40)
-        ib_container.setStyleSheet("background-color: #1a2236; border-radius: 12px;")
-        ib_layout = QVBoxLayout(ib_container)
-        ib_layout.setContentsMargins(0,0,0,0)
-        ib_layout.setAlignment(Qt.AlignCenter)
-        
-        iw = IconWidget(icon)
-        iw.setFixedSize(20, 20)
-        # Tint icon
-        # iw.setStyleSheet("color: #33b5e5;") # IconWidget doesn't style this way easily
-        ib_layout.addWidget(iw)
-        
-        left.addWidget(ib_container)
-        
-        lbl = BodyLabel(title)
-        lbl.setStyleSheet("color: #8b9bb4; font-size: 13px; font-weight: 500;")
-        left.addWidget(lbl)
-        
-        layout.addLayout(left)
-        layout.addStretch()
-        
-        # Right Side: Big Number
-        self.num_label = QLabel(str(count))
-        self.num_label.setStyleSheet("font-size: 28px; font-weight: bold; color: #e8eaed;")
-        self.num_label.setAlignment(Qt.AlignRight | Qt.AlignTop)
-        layout.addWidget(self.num_label)
 
-    def set_count(self, count):
-        self.num_label.setText(str(count))
-    
-    def mousePressEvent(self, event):
-        super().mousePressEvent(event)
-        if self.route_key:
-            self.navigate_requested.emit(self.route_key)
-
-class HomeScenesCard(CardWidget):
+class JARVISHeader(QWidget):
     """
-    Card with Home Scene buttons that control Kasa devices.
+    JARVIS-styled header: Arc Reactor + greeting text + live data tickers.
     """
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedSize(280, 160)
-        self.setBorderRadius(16)
+        self.setMinimumHeight(140)
+
+        outer = QHBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(30)
+
+        # ── Arc Reactor ───────────────────────────────────────────────
+        self.reactor = ArcReactorWidget(size=110)
+        outer.addWidget(self.reactor, 0, Qt.AlignVCenter)
+
+        # ── Text block ────────────────────────────────────────────────
+        text_col = QVBoxLayout()
+        text_col.setSpacing(4)
+        text_col.setContentsMargins(0, 0, 0, 0)
+
+        self.sub_lbl = QLabel("JARVIS  ·  JUST A RATHER VERY INTELLIGENT SYSTEM")
+        self.sub_lbl.setStyleSheet(
+            f"color: {_MUTED}; font-size: 11px; letter-spacing: 3px; font-family: Consolas;"
+        )
+
+        self.greeting_lbl = QLabel("GOOD MORNING")
+        self.greeting_lbl.setStyleSheet(
+            f"color: {_CYAN}; font-size: 38px; font-weight: 700;"
+            " font-family: 'Segoe UI', 'SF Pro Display', sans-serif;"
+        )
+
+        self.date_lbl = QLabel()
+        self.date_lbl.setStyleSheet(
+            f"color: {_MUTED}; font-size: 13px; font-family: Consolas; letter-spacing: 1px;"
+        )
+
+        text_col.addWidget(self.sub_lbl)
+        text_col.addWidget(self.greeting_lbl)
+        text_col.addWidget(self.date_lbl)
+
+        outer.addLayout(text_col, 1)
+
+        # ── Right: data tickers + time bubble ─────────────────────────
+        right_col = QVBoxLayout()
+        right_col.setSpacing(6)
+        right_col.setAlignment(Qt.AlignVCenter | Qt.AlignRight)
+
+        # Time bubble
+        time_frame = QFrame()
+        time_frame.setFixedSize(160, 72)
+        time_frame.setStyleSheet(f"""
+            QFrame {{
+                background-color: {_CARD};
+                border: 1px solid rgba(0, 212, 255, 0.25);
+                border-top: 1px solid rgba(0, 212, 255, 0.6);
+                border-radius: 16px;
+            }}
+        """)
+        tf_layout = QVBoxLayout(time_frame)
+        tf_layout.setAlignment(Qt.AlignCenter)
+        tf_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.clock_lbl = QLabel("00:00 AM")
+        self.clock_lbl.setAlignment(Qt.AlignCenter)
+        self.clock_lbl.setStyleSheet(
+            f"color: {_CYAN}; font-size: 22px; font-weight: 700; font-family: Consolas;"
+        )
+        tf_layout.addWidget(self.clock_lbl)
+
+        # Weather bubble
+        wx_frame = QFrame()
+        wx_frame.setFixedSize(160, 72)
+        wx_frame.setStyleSheet(f"""
+            QFrame {{
+                background-color: {_CARD};
+                border: 1px solid rgba(0, 212, 255, 0.20);
+                border-top: 1px solid rgba(0, 212, 255, 0.50);
+                border-radius: 16px;
+            }}
+        """)
+        wx_layout = QVBoxLayout(wx_frame)
+        wx_layout.setAlignment(Qt.AlignCenter)
+        wx_layout.setContentsMargins(0, 4, 0, 4)
+        wx_layout.setSpacing(2)
+
+        self.wx_icon  = QLabel("⛅")
+        self.wx_icon.setAlignment(Qt.AlignCenter)
+        self.wx_icon.setStyleSheet("font-size: 20px; background: transparent;")
+
+        self.wx_temp  = QLabel("--°F")
+        self.wx_temp.setAlignment(Qt.AlignCenter)
+        self.wx_temp.setStyleSheet(
+            f"color: {_TEXT}; font-size: 14px; font-weight: 600; font-family: Consolas;"
+        )
+
+        self.wx_cond  = QLabel("LOADING")
+        self.wx_cond.setAlignment(Qt.AlignCenter)
+        self.wx_cond.setStyleSheet(
+            f"color: {_MUTED}; font-size: 10px; letter-spacing: 2px; font-family: Consolas;"
+        )
+
+        wx_layout.addWidget(self.wx_icon)
+        wx_layout.addWidget(self.wx_temp)
+        wx_layout.addWidget(self.wx_cond)
+
+        right_col.addWidget(time_frame)
+        right_col.addWidget(wx_frame)
+        outer.addLayout(right_col)
+
+        # ── Timers ────────────────────────────────────────────────────
+        self._update_time()
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._update_time)
+        self._timer.start(1000)
+
+        self._fetch_weather()
+        self._wx_timer = QTimer(self)
+        self._wx_timer.timeout.connect(self._fetch_weather)
+        self._wx_timer.start(900_000)
+
+    def _update_time(self):
+        now = datetime.now()
+        h = now.hour
+        greeting = ("GOOD MORNING" if 5 <= h < 12 else
+                    "GOOD AFTERNOON" if 12 <= h < 18 else
+                    "GOOD EVENING")
+        self.greeting_lbl.setText(greeting)
+        self.date_lbl.setText(
+            "[ " + QDate.currentDate().toString("dddd, MMMM d").upper() + " ]"
+        )
+        self.clock_lbl.setText(QTime.currentTime().toString("h:mm AP"))
+
+    def _fetch_weather(self):
+        self._wx_worker = WeatherWorker()
+        self._wx_worker.finished.connect(self._on_weather)
+        self._wx_worker.start()
+
+    def _on_weather(self, data):
+        if not data:
+            self.wx_cond.setText("OFFLINE")
+            return
+        temp = data.get("temp", "--")
+        code = data.get("code", -1)
+        self.wx_temp.setText(f"{int(temp)}°F")
+        mapping = {
+            0: ("☀️", "CLEAR"),
+            1: ("🌤️", "MOSTLY CLEAR"),
+            2: ("⛅", "PARTLY CLOUDY"),
+            3: ("☁️", "OVERCAST"),
+        }
+        if code in mapping:
+            icon, text = mapping[code]
+        elif code in [45, 48]:
+            icon, text = "🌫️", "FOG"
+        elif 51 <= code <= 65:
+            icon, text = "🌧️", "RAIN"
+        elif 71 <= code <= 77:
+            icon, text = "❄️", "SNOW"
+        elif code >= 95:
+            icon, text = "⚡", "STORM"
+        else:
+            icon, text = "🌡️", "UNKNOWN"
+        self.wx_icon.setText(icon)
+        self.wx_cond.setText(text)
+
+
+# ── Stat Cards ────────────────────────────────────────────────────────────────
+
+class JARVISStatCard(HUDCard):
+    """
+    Compact stat card — icon + label + big number, clickable.
+    """
+    navigate_requested = Signal(str)
+
+    def __init__(self, icon: FIF, title: str, count: str,
+                 route_key: str = None,
+                 accent_color: str = _CYAN,
+                 parent=None):
+        super().__init__(corner_size=12, accent_color=accent_color, parent=parent)
+        self.setFixedSize(265, 106)
+        self.route_key = route_key
+        if route_key:
+            self.setCursor(Qt.PointingHandCursor)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(18, 16, 20, 16)
+
+        # Left: icon bubble + label
+        left = QVBoxLayout()
+        left.setSpacing(12)
+
+        ib = QFrame()
+        ib.setFixedSize(36, 36)
+        ib.setStyleSheet(f"""
+            QFrame {{
+                background-color: rgba(0, 212, 255, 0.08);
+                border: 1px solid rgba(0, 212, 255, 0.25);
+                border-radius: 10px;
+            }}
+        """)
+        ib_l = QVBoxLayout(ib)
+        ib_l.setContentsMargins(0, 0, 0, 0)
+        ib_l.setAlignment(Qt.AlignCenter)
+        iw = IconWidget(icon)
+        iw.setFixedSize(18, 18)
+        ib_l.addWidget(iw)
+
+        lbl = QLabel(title.upper())
+        lbl.setStyleSheet(
+            f"color: {_MUTED}; font-size: 11px; font-weight: 500; "
+            "letter-spacing: 1px; font-family: Consolas;"
+        )
+
+        left.addWidget(ib)
+        left.addWidget(lbl)
+        layout.addLayout(left)
+        layout.addStretch()
+
+        # Right: pulsing status orb + number
+        right = QVBoxLayout()
+        right.setAlignment(Qt.AlignRight | Qt.AlignTop)
+        right.setSpacing(8)
+
+        orb_row = QHBoxLayout()
+        orb_row.setAlignment(Qt.AlignRight)
+        self._orb = PulseOrb(10, QColor(accent_color))
+        orb_row.addWidget(self._orb)
+        right.addLayout(orb_row)
+        right.addStretch()
+
+        self.num_lbl = QLabel(str(count))
+        self.num_lbl.setAlignment(Qt.AlignRight)
+        self.num_lbl.setStyleSheet(
+            f"color: {accent_color}; font-size: 32px; font-weight: 700; font-family: Consolas;"
+        )
+        right.addWidget(self.num_lbl)
+
+        layout.addLayout(right)
+
+    def set_count(self, count):
+        self.num_lbl.setText(str(count))
+
+    def mousePressEvent(self, e):
+        super().mousePressEvent(e)
+        if self.route_key:
+            self.navigate_requested.emit(self.route_key)
+
+
+# ── Home Scenes ───────────────────────────────────────────────────────────────
+
+class HomeScenesCard(HUDCard):
+    """
+    Quick-access scene buttons with JARVIS styling.
+    """
+    def __init__(self, parent=None):
+        super().__init__(corner_size=14, accent_color=_GOLD, parent=parent)
+        self.setFixedSize(265, 148)
         self._devices = []
         self._action_thread = None
-        
+
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
-        
-        t1 = StrongBodyLabel("Home Scenes")
-        t2 = BodyLabel("Instant environmental adjustments.")
-        t2.setStyleSheet("color: #6e7a8e; font-size: 12px;")
-        
-        layout.addWidget(t1)
-        layout.addWidget(t2)
-        
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(10)
+
+        # Header
+        hdr = QHBoxLayout()
+        title_lbl = QLabel("HOME SCENES")
+        title_lbl.setStyleSheet(
+            f"color: {_GOLD}; font-size: 11px; font-weight: 700; letter-spacing: 2px; font-family: Consolas;"
+        )
+        hdr.addWidget(title_lbl)
+        hdr.addStretch()
+        hdr.addWidget(PulseOrb(8, QColor(_GOLD)))
+        layout.addLayout(hdr)
+
+        layout.addWidget(HUDDivider(color=QColor(_GOLD), opacity=0.3))
+
+        sub = QLabel("Instant environmental adjustments")
+        sub.setStyleSheet(f"color: {_MUTED}; font-size: 11px;")
+        layout.addWidget(sub)
+
         # Buttons
         btns = QHBoxLayout()
-        self.focus_btn = QPushButton("Focus Mode")
-        self.focus_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #1a2236; color: #e8eaed; border: 1px solid #1a2236; 
-                border-radius: 8px; padding: 8px; font-weight: bold;
-            }
-            QPushButton:hover { background-color: #232d45; }
+        btns.setSpacing(10)
+
+        self.focus_btn = QPushButton("⬛  FOCUS")
+        self.focus_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: rgba(255, 215, 0, 0.12);
+                color: {_GOLD};
+                border: 1px solid rgba(255, 215, 0, 0.35);
+                border-radius: 8px;
+                padding: 7px 10px;
+                font-weight: 700;
+                font-size: 11px;
+                font-family: Consolas;
+                letter-spacing: 1px;
+            }}
+            QPushButton:hover {{
+                background-color: rgba(255, 215, 0, 0.22);
+                border: 1px solid rgba(255, 215, 0, 0.6);
+            }}
         """)
         self.focus_btn.clicked.connect(self._on_focus_mode)
-        
-        self.relax_btn = QPushButton("Relax")
-        self.relax_btn.setStyleSheet("""
-            QPushButton {
-                background-color: transparent; color: #e8eaed; border: 1px solid #1a2236; 
-                border-radius: 8px; padding: 8px; font-weight: bold;
-            }
-            QPushButton:hover { background-color: #1a2236; }
+
+        self.relax_btn = QPushButton("◎  RELAX")
+        self.relax_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: rgba(0, 212, 255, 0.08);
+                color: {_CYAN};
+                border: 1px solid rgba(0, 212, 255, 0.25);
+                border-radius: 8px;
+                padding: 7px 10px;
+                font-weight: 700;
+                font-size: 11px;
+                font-family: Consolas;
+                letter-spacing: 1px;
+            }}
+            QPushButton:hover {{
+                background-color: rgba(0, 212, 255, 0.16);
+                border: 1px solid rgba(0, 212, 255, 0.5);
+            }}
         """)
         self.relax_btn.clicked.connect(self._on_relax_mode)
-        
+
         btns.addWidget(self.focus_btn)
         btns.addWidget(self.relax_btn)
         layout.addLayout(btns)
-    
-    def set_devices(self, devices: list):
-        """Store the discovered devices for scene control."""
+
+    def set_devices(self, devices):
         self._devices = devices
-    
+
     def _on_focus_mode(self):
-        """Focus Mode: Turn off all lights to minimize distractions."""
         if not self._devices:
             return
-        self._run_scene_action(self._focus_action)
-    
+        self._run_action(self._focus_action)
+
     def _on_relax_mode(self):
-        """Relax Mode: Dim lights to 40%."""
         if not self._devices:
             return
-        self._run_scene_action(self._relax_action)
-    
-    def _run_scene_action(self, action_func):
-        """Run a scene action in a background thread."""
-        class SceneThread(QThread):
-            def __init__(self, func):
+        self._run_action(self._relax_action)
+
+    def _run_action(self, fn):
+        from PySide6.QtCore import QThread
+
+        class T(QThread):
+            def __init__(self, f):
                 super().__init__()
-                self.func = func
+                self.f = f
             def run(self):
                 try:
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
-                    loop.run_until_complete(self.func())
+                    loop.run_until_complete(self.f())
                     loop.close()
                 except Exception as e:
-                    print(f"Scene action error: {e}")
-        
-        # Wait for any previous thread to finish (with safety check)
+                    print(f"[Scenes] {e}")
+
         try:
-            if self._action_thread is not None and self._action_thread.isRunning():
+            if self._action_thread and self._action_thread.isRunning():
                 self._action_thread.wait()
         except RuntimeError:
-            # C++ object already deleted, that's fine
             pass
-        
-        self._action_thread = SceneThread(action_func)
-        # Clear our reference when finished to avoid stale reference issues
+        self._action_thread = T(fn)
         self._action_thread.finished.connect(lambda: setattr(self, '_action_thread', None))
         self._action_thread.start()
-    
+
     async def _focus_action(self):
-        """Turn off all discovered devices."""
-        for device in self._devices:
+        for d in self._devices:
             try:
-                dev_obj = device.get('obj')
-                await kasa_manager.turn_off(device['ip'], dev=dev_obj)
+                await kasa_manager.turn_off(d['ip'], dev=d.get('obj'))
             except Exception as e:
-                print(f"Focus mode error for {device['alias']}: {e}")
-    
+                print(f"[Focus] {e}")
+
     async def _relax_action(self):
-        """Dim all dimmable devices to 40%."""
-        for device in self._devices:
+        for d in self._devices:
             try:
-                dev_obj = device.get('obj')
-                if device.get('brightness') is not None:
-                    await kasa_manager.set_brightness(device['ip'], 40, dev=dev_obj)
-                    await kasa_manager.turn_on(device['ip'], dev=dev_obj)
+                if d.get('brightness') is not None:
+                    await kasa_manager.set_brightness(d['ip'], 40, dev=d.get('obj'))
+                    await kasa_manager.turn_on(d['ip'], dev=d.get('obj'))
                 else:
-                    # For non-dimmable, just turn on
-                    await kasa_manager.turn_on(device['ip'], dev=dev_obj)
+                    await kasa_manager.turn_on(d['ip'], dev=d.get('obj'))
             except Exception as e:
-                print(f"Relax mode error for {device['alias']}: {e}")
+                print(f"[Relax] {e}")
 
 
-class IntelligenceItem(QFrame):
+# ── Intelligence Feed ─────────────────────────────────────────────────────────
+
+class IntelItem(QFrame):
     """
-    Single row in the Intelligence Feed.
+    Single row in the Intelligence Feed — JARVIS styled.
     """
-    def __init__(self, icon: FIF, title: str, description: str, time_str: str, parent=None):
+    def __init__(self, icon: FIF, title: str, description: str, ts: str,
+                 accent: str = _CYAN, parent=None):
         super().__init__(parent)
         self.setStyleSheet("background: transparent; border: none;")
-        
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 10, 0, 10)
-        layout.setSpacing(15)
-        
+
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 8, 0, 8)
+        row.setSpacing(14)
+
         # Icon
-        ic_bg = QFrame()
-        ic_bg.setFixedSize(36, 36)
-        ic_bg.setStyleSheet("background-color: #141c2f; border-radius: 10px;")
-        icl = QVBoxLayout(ic_bg)
-        icl.setContentsMargins(0,0,0,0)
-        icl.setAlignment(Qt.AlignCenter)
-        icl.addWidget(IconWidget(icon))
-        
-        layout.addWidget(ic_bg)
-        
+        ib = QFrame()
+        ib.setFixedSize(34, 34)
+        ib.setStyleSheet(f"""
+            QFrame {{
+                background-color: rgba(0, 212, 255, 0.07);
+                border: 1px solid rgba(0, 212, 255, 0.2);
+                border-radius: 9px;
+            }}
+        """)
+        il = QVBoxLayout(ib)
+        il.setContentsMargins(0, 0, 0, 0)
+        il.setAlignment(Qt.AlignCenter)
+        iw = IconWidget(icon)
+        iw.setFixedSize(17, 17)
+        il.addWidget(iw)
+        row.addWidget(ib)
+
         # Content
         col = QVBoxLayout()
-        col.setSpacing(4)
-        
-        top_line = QHBoxLayout()
-        self.t_lbl = StrongBodyLabel(title)
-        self.time_lbl = BodyLabel(time_str)
-        self.time_lbl.setStyleSheet("color: #6e7a8e; font-size: 11px;")
-        
-        top_line.addWidget(self.t_lbl)
-        top_line.addStretch()
-        top_line.addWidget(self.time_lbl)
-        
-        self.desc_lbl = BodyLabel(description)
-        self.desc_lbl.setStyleSheet("color: #8b9bb4; font-size: 12px;")
-        self.desc_lbl.setWordWrap(True)
-        
-        col.addLayout(top_line)
-        col.addWidget(self.desc_lbl)
-        
-        layout.addLayout(col)
-        
-    def update_content(self, title: str, description: str, time_str: str):
-        self.t_lbl.setText(title)
-        self.desc_lbl.setText(description)
-        self.time_lbl.setText(time_str)
+        col.setSpacing(3)
 
-class IntelligenceFeed(CardWidget):
-    """
-    Main content area: System Intelligence.
-    """
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setBorderRadius(20)
-        
-        self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(30, 25, 30, 30)
-        self.layout.setSpacing(20)
-        
-        # Header
-        h_layout = QHBoxLayout()
-        h = TitleLabel("System Intelligence", self)
-        h.setStyleSheet("font-size: 18px; font-weight: bold;")
-        
-        live_tag = QLabel("Live Updates")
-        live_tag.setStyleSheet("""
-            background-color: #1a2236; color: #8b9bb4; 
-            padding: 4px 10px; border-radius: 6px; font-size: 10px; font-weight: bold;
-        """)
-        
-        h_layout.addWidget(h)
-        h_layout.addStretch()
-        h_layout.addWidget(live_tag)
-        
-        self.layout.addLayout(h_layout)
-        
-        # 1. Daily Focus
-        self.focus_item = IntelligenceItem(
-            FIF.TILES,
-            "Daily Focus",
-            "Analyzing your schedule...",
-            "NOW"
+        top = QHBoxLayout()
+        self._title = QLabel(title.upper())
+        self._title.setStyleSheet(
+            f"color: {_TEXT}; font-size: 12px; font-weight: 600; letter-spacing: 1px; font-family: Consolas;"
         )
-        self.layout.addWidget(self.focus_item)
-        
-        # Separator
-        sep1 = QFrame()
-        sep1.setFixedHeight(1)
-        sep1.setStyleSheet("background-color: #1a2236;")
-        self.layout.addWidget(sep1)
-        
-        # 2. News (Intel Alert)
-        self.news_item = IntelligenceItem(
-            FIF.WIFI,
-            "Intel Alert",
-            "Syncing intelligence streams...",
-            "NOW"
+        self._ts = QLabel(ts)
+        self._ts.setStyleSheet(
+            f"color: {accent}; font-size: 10px; font-family: Consolas; letter-spacing: 1px;"
         )
-        self.layout.addWidget(self.news_item)
-            
-        # Separator
-        sep2 = QFrame()
-        sep2.setFixedHeight(1)
-        sep2.setStyleSheet("background-color: #1a2236;")
-        self.layout.addWidget(sep2)
-        
-        # 3. Devices Status
-        self.devices_item = IntelligenceItem(
-            FIF.IOT, 
-            "Smart Home",
-            "Scanning for connected devices...",
-            "NOW"
-        )
-        self.layout.addWidget(self.devices_item)
-        
-        self.layout.addStretch()
-        
-        # Upcoming Priority Card (Embedded at bottom)
-        self.priority = PriorityCard()
-        self.layout.addWidget(self.priority)
+        top.addWidget(self._title)
+        top.addStretch()
+        top.addWidget(self._ts)
 
-    def update_news(self, news):
-        if news:
-            top = news[0]
-            self.news_item.update_content("Intel Alert", top['title'], "JUST NOW")
-        else:
-            self.news_item.update_content("Intel Alert", "No active intelligence streams detected.", "NOW")
-    
-    def update_devices(self, devices):
-        count = len(devices) if devices else 0
-        online = sum(1 for d in devices if d.get('is_on')) if devices else 0
-        if count > 0:
-            self.devices_item.update_content(
-                "Smart Home", 
-                f"{count} devices found, {online} currently on.", 
-                "LIVE"
-            )
-        else:
-            self.devices_item.update_content(
-                "Smart Home", 
-                "No Kasa devices detected on network.", 
-                "NOW"
-            )
-    
-    def update_focus(self, tasks):
-        active = [t for t in tasks if not t.get('completed')]
-        if active:
-            self.focus_item.update_content(
-                "Daily Focus",
-                f"You have {len(active)} active task{'s' if len(active) != 1 else ''} to complete today.",
-                "NOW"
-            )
-        else:
-            self.focus_item.update_content(
-                "Daily Focus",
-                "All tasks completed. Great job!",
-                "NOW"
-            )
+        self._desc = QLabel(description)
+        self._desc.setStyleSheet(f"color: {_MUTED}; font-size: 12px;")
+        self._desc.setWordWrap(True)
+
+        col.addLayout(top)
+        col.addWidget(self._desc)
+        row.addLayout(col)
+
+    def update_content(self, title, description, ts):
+        self._title.setText(title.upper())
+        self._desc.setText(description)
+        self._ts.setText(ts)
+
 
 class PriorityCard(QFrame):
     """
-    Blue gradient card for next priority.
+    Gold priority card with gradient — next upcoming event.
     """
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedHeight(100)
+        self.setFixedHeight(96)
         self.setStyleSheet("""
             QFrame {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #33b5e5, stop:1 #4a68af);
-                border-radius: 16px;
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:0,
+                    stop:0   #1a1200,
+                    stop:0.3 #2a1f00,
+                    stop:1   #1a1200
+                );
+                border: 1px solid rgba(255, 215, 0, 0.35);
+                border-top: 1px solid rgba(255, 215, 0, 0.7);
+                border-radius: 14px;
             }
         """)
-        
+
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(25, 0, 25, 0)
-        
-        # Text
+        layout.setContentsMargins(22, 0, 22, 0)
+
         txt = QVBoxLayout()
         txt.setAlignment(Qt.AlignVCenter)
-        txt.setSpacing(5)
-        
-        l1 = QLabel("Upcoming Priority")
-        l1.setStyleSheet("color: white; font-weight: bold; font-size: 16px; background: transparent;")
-        
-        self.title_label = QLabel("No upcoming events")
-        self.title_label.setStyleSheet("color: rgba(255,255,255,0.9); font-size: 14px; background: transparent;")
-        
-        self.time_label = QLabel("")
-        self.time_label.setStyleSheet("color: rgba(255,255,255,0.7); font-size: 12px; background: transparent;")
-        
-        txt.addWidget(l1)
-        txt.addWidget(self.title_label)
-        txt.addWidget(self.time_label)
-        
+        txt.setSpacing(4)
+
+        top_row = QHBoxLayout()
+        top_row.setSpacing(8)
+        orb = PulseOrb(8, QColor(_GOLD))
+        l_pri = QLabel("UPCOMING PRIORITY")
+        l_pri.setStyleSheet(
+            f"color: {_GOLD}; font-weight: 700; font-size: 11px; "
+            "letter-spacing: 2px; font-family: Consolas;"
+        )
+        top_row.addWidget(orb)
+        top_row.addWidget(l_pri)
+        top_row.addStretch()
+
+        self._event_lbl = QLabel("No upcoming events")
+        self._event_lbl.setStyleSheet(
+            f"color: {_TEXT}; font-size: 14px; font-weight: 600;"
+        )
+        self._time_lbl = QLabel("Enjoy your free time.")
+        self._time_lbl.setStyleSheet(f"color: {_MUTED}; font-size: 12px;")
+
+        txt.addLayout(top_row)
+        txt.addWidget(self._event_lbl)
+        txt.addWidget(self._time_lbl)
+
         layout.addLayout(txt)
         layout.addStretch()
-        
-        # Button
-        btn = QPushButton("Details")
-        btn.setFixedSize(80, 32)
-        btn.setStyleSheet("""
-            QPushButton {
-                background-color: rgba(255,255,255,0.2);
-                color: white;
+
+        detail_btn = QPushButton("DETAILS")
+        detail_btn.setFixedSize(80, 30)
+        detail_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: rgba(255, 215, 0, 0.12);
+                color: {_GOLD};
+                border: 1px solid rgba(255, 215, 0, 0.4);
                 border-radius: 8px;
-                border: 1px solid rgba(255,255,255,0.3);
-                font-weight: bold;
-            }
-            QPushButton:hover { background-color: rgba(255,255,255,0.3); }
+                font-weight: 700;
+                font-size: 10px;
+                font-family: Consolas;
+                letter-spacing: 1px;
+            }}
+            QPushButton:hover {{
+                background-color: rgba(255, 215, 0, 0.22);
+            }}
         """)
-        layout.addWidget(btn)
+        layout.addWidget(detail_btn)
 
     def update_event(self, events: list):
-        """Update with the next upcoming event from the list."""
         now = datetime.now()
-        next_event = None
-        
-        for event in events:
+        nxt = None
+        for ev in events:
             try:
-                start_time = datetime.strptime(event['start_time'], "%Y-%m-%d %H:%M:%S")
-                if start_time > now:
-                    if next_event is None or start_time < datetime.strptime(next_event['start_time'], "%Y-%m-%d %H:%M:%S"):
-                        next_event = event
+                t = datetime.strptime(ev['start_time'], "%Y-%m-%d %H:%M:%S")
+                if t > now and (nxt is None or t < datetime.strptime(
+                        nxt['start_time'], "%Y-%m-%d %H:%M:%S")):
+                    nxt = ev
             except (KeyError, ValueError):
                 continue
-        
-        if next_event:
-            self.title_label.setText(next_event['title'])
-            start_time = datetime.strptime(next_event['start_time'], "%Y-%m-%d %H:%M:%S")
-            delta = start_time - now
-            minutes = int(delta.total_seconds() / 60)
-            if minutes < 60:
-                self.time_label.setText(f"Starts in {minutes} minutes")
-            else:
-                hours = minutes // 60
-                self.time_label.setText(f"Starts in {hours} hour{'s' if hours > 1 else ''}")
+
+        if nxt:
+            self._event_lbl.setText(nxt['title'])
+            t = datetime.strptime(nxt['start_time'], "%Y-%m-%d %H:%M:%S")
+            mins = int((t - now).total_seconds() / 60)
+            self._time_lbl.setText(
+                f"T-{mins} MIN" if mins < 60 else f"T-{mins // 60} HR"
+            )
         else:
-            self.title_label.setText("No upcoming events")
-            self.time_label.setText("Enjoy your free time!")
+            self._event_lbl.setText("No upcoming events")
+            self._time_lbl.setText("Standby mode.")
+
+
+class IntelligenceFeed(QFrame):
+    """
+    Main intel feed card with animated scan line overlay.
+    """
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setStyleSheet(f"""
+            QFrame {{
+                background-color: {_CARD};
+                border: 1px solid rgba(0, 212, 255, 0.15);
+                border-top: 1px solid rgba(0, 212, 255, 0.45);
+                border-radius: 18px;
+            }}
+        """)
+        self.setMinimumWidth(420)
+
+        self._layout = QVBoxLayout(self)
+        self._layout.setContentsMargins(28, 22, 28, 22)
+        self._layout.setSpacing(0)
+
+        # Header row
+        hdr = QHBoxLayout()
+        title = QLabel("SYSTEM INTELLIGENCE")
+        title.setStyleSheet(
+            f"color: {_TEXT}; font-size: 16px; font-weight: 700; "
+            "letter-spacing: 2px; font-family: Consolas;"
+        )
+        live_tag = QLabel("◉  LIVE")
+        live_tag.setStyleSheet(
+            f"color: {_CYAN}; font-size: 10px; font-weight: 700; "
+            f"background-color: rgba(0, 212, 255, 0.08); "
+            f"border: 1px solid rgba(0, 212, 255, 0.3); "
+            "border-radius: 6px; padding: 3px 10px; font-family: Consolas; letter-spacing: 2px;"
+        )
+        hdr.addWidget(title)
+        hdr.addStretch()
+        hdr.addWidget(live_tag)
+        self._layout.addLayout(hdr)
+        self._layout.addSpacing(14)
+
+        # Items
+        self.focus_item   = IntelItem(FIF.TILES, "Daily Focus",
+                                      "Analyzing schedule…", "NOW")
+        self._layout.addWidget(self.focus_item)
+        self._layout.addWidget(HUDDivider(opacity=0.25))
+
+        self.news_item    = IntelItem(FIF.WIFI, "Intel Alert",
+                                      "Syncing intelligence…", "NOW")
+        self._layout.addWidget(self.news_item)
+        self._layout.addWidget(HUDDivider(opacity=0.25))
+
+        self.devices_item = IntelItem(FIF.IOT, "Smart Home",
+                                      "Scanning devices…", "NOW")
+        self._layout.addWidget(self.devices_item)
+
+        self._layout.addStretch()
+
+        # Priority card
+        self.priority = PriorityCard()
+        self._layout.addWidget(self.priority)
+
+        # Scan line overlay — positioned on top of all content
+        self._scan = ScanLineWidget(self.width(), self.height(), parent=self)
+        self._scan.lower()
+        self._scan.raise_()
+
+        # HUD corners
+        self._corners = HUDCornerWidget(
+            self.width(), self.height(), QColor(_CYAN), 18, self
+        )
+        self._corners.raise_()
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        self._scan.resize(self.width(), self.height())
+        self._corners.resize(self.width(), self.height())
+        self._scan.raise_()
+        self._corners.raise_()
+
+    def update_news(self, news):
+        if news:
+            self.news_item.update_content("Intel Alert", news[0]['title'], "JUST NOW")
+        else:
+            self.news_item.update_content("Intel Alert", "No active streams.", "NOW")
+
+    def update_devices(self, devices):
+        n  = len(devices) if devices else 0
+        on = sum(1 for d in devices if d.get('is_on')) if devices else 0
+        if n:
+            self.devices_item.update_content(
+                "Smart Home", f"{n} devices online — {on} active.", "LIVE"
+            )
+        else:
+            self.devices_item.update_content(
+                "Smart Home", "No Kasa devices found on network.", "NOW"
+            )
+
+    def update_focus(self, tasks):
+        active = [t for t in tasks if not t.get('completed')]
+        if active:
+            count = len(active)
+            self.focus_item.update_content(
+                "Daily Focus",
+                f"{count} active task{'s' if count != 1 else ''} pending.",
+                "NOW"
+            )
+        else:
+            self.focus_item.update_content(
+                "Daily Focus", "All tasks completed. System nominal.", "NOW"
+            )
+
+
+# ── Data loader ───────────────────────────────────────────────────────────────
 
 class DashboardLoader(QThread):
     finished = Signal(dict)
-    
+
     def run(self):
-        # Fetch tasks, news, devices, and calendar in background
         try:
             tasks = task_manager.get_tasks()
-            news = news_manager.get_briefing(use_ai=False)
-            
-            # Fetch Kasa devices
+            news  = news_manager.get_briefing(use_ai=False)
+
             devices = []
             try:
-                print("[Dashboard] Starting Kasa device discovery...")
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-                devices_dict = loop.run_until_complete(kasa_manager.discover_devices())
+                dd = loop.run_until_complete(kasa_manager.discover_devices())
                 loop.close()
-                # Convert dict to list for GUI
-                devices = list(devices_dict.values()) if isinstance(devices_dict, dict) else devices_dict
-                print(f"[Dashboard] Found {len(devices)} devices")
+                devices = list(dd.values()) if isinstance(dd, dict) else dd
             except Exception as e:
-                print(f"[Dashboard] Kasa discovery error: {e}")
-            
-            # Fetch today's calendar events
+                print(f"[Dashboard] Kasa: {e}")
+
             today_str = datetime.now().strftime("%Y-%m-%d")
             events = calendar_manager.get_events(today_str)
-            
-            print("[Dashboard] Data loading complete, emitting signal")
+
             self.finished.emit({
-                "tasks": tasks,
-                "news": news,
-                "devices": devices,
-                "events": events
+                "tasks": tasks, "news": news,
+                "devices": devices, "events": events
             })
         except Exception as e:
             print(f"[Dashboard] Loader error: {e}")
             self.finished.emit({"tasks": [], "news": [], "devices": [], "events": []})
 
+
+# ── Main DashboardView ────────────────────────────────────────────────────────
+
 class DashboardView(QWidget):
     """
-    The main 'System Intelligence' Dashboard.
-    Emits navigate_to signal when user clicks on a stat card to go to that tab.
+    JARVIS System Intelligence Dashboard.
     """
-    navigate_to = Signal(str)  # Emits the route key (e.g., "plannerInterface")
-    
+    navigate_to = Signal(str)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("dashboardView")
-        
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(40, 40, 40, 40)
-        main_layout.setSpacing(30)
-        
-        # 1. Greeting Header
-        self.header = GreetingsHeader()
-        main_layout.addWidget(self.header)
-        
-        # 2. Main Content Area (2 Columns)
-        content_layout = QHBoxLayout()
-        content_layout.setSpacing(25)
-        
-        # --- Left Column (Stats) ---
-        left_col = QVBoxLayout()
-        left_col.setSpacing(20)
-        
-        # Stat 1: Planner - navigates to plannerInterface
-        self.planner_stat = StatCard(FIF.CALENDAR, "Planner Agenda", "--", "plannerInterface")
+
+        main = QVBoxLayout(self)
+        main.setContentsMargins(40, 36, 40, 36)
+        main.setSpacing(28)
+
+        # Header
+        self.header = JARVISHeader()
+        main.addWidget(self.header)
+
+        # Thin divider
+        main.addWidget(HUDDivider(opacity=0.35))
+
+        # 2-column content
+        content = QHBoxLayout()
+        content.setSpacing(24)
+
+        # Left column
+        left = QVBoxLayout()
+        left.setSpacing(14)
+
+        self.planner_stat = JARVISStatCard(
+            FIF.CALENDAR, "Planner Agenda", "--", "plannerInterface"
+        )
         self.planner_stat.navigate_requested.connect(self._on_navigate)
-        left_col.addWidget(self.planner_stat)
-        
-        # Stat 2: Devices - navigates to homeInterface
-        self.devices_stat = StatCard(FIF.IOT, "Active Devices", "--", "homeInterface")
+        left.addWidget(self.planner_stat)
+
+        self.devices_stat = JARVISStatCard(
+            FIF.IOT, "Active Devices", "--", "homeInterface",
+            accent_color=_GOLD
+        )
         self.devices_stat.navigate_requested.connect(self._on_navigate)
-        left_col.addWidget(self.devices_stat)
-        
-        # Stat 3: Unread News - navigates to briefingInterface
-        self.news_stat = StatCard(FIF.TILES, "Unread News", "--", "briefingInterface")
+        left.addWidget(self.devices_stat)
+
+        self.news_stat = JARVISStatCard(
+            FIF.TILES, "Unread Intel", "--", "briefingInterface",
+            accent_color=_CYAN
+        )
         self.news_stat.navigate_requested.connect(self._on_navigate)
-        left_col.addWidget(self.news_stat)
-        
-        # Home Scenes
+        left.addWidget(self.news_stat)
+
         self.home_scenes = HomeScenesCard()
-        left_col.addWidget(self.home_scenes)
-        
-        left_col.addStretch()
-        content_layout.addLayout(left_col)
-        
-        # --- Right Column (Feed) ---
+        left.addWidget(self.home_scenes)
+
+        left.addStretch()
+        content.addLayout(left)
+
+        # Right column — intelligence feed
         self.feed = IntelligenceFeed()
-        # Feed card should expand
-        content_layout.addWidget(self.feed, 1)
-        
-        main_layout.addLayout(content_layout)
-        
-        # Store devices for scene control
-        self._devices = []
-        self.loader = None
-        
-        # Trigger async load
-        QTimer.singleShot(100, self._start_loading)
+        content.addWidget(self.feed, 1)
+
+        main.addLayout(content)
+
+        self._devices  = []
+        self.loader    = None
+        QTimer.singleShot(120, self._start_loading)
 
     def _start_loading(self):
-        # Prevent multiple loaders
         if self.loader and self.loader.isRunning():
             return
         self.loader = DashboardLoader(self)
@@ -721,29 +862,23 @@ class DashboardView(QWidget):
         self.loader.start()
 
     def _on_data_loaded(self, data):
-        tasks = data.get("tasks", [])
-        news = data.get("news", [])
+        tasks   = data.get("tasks", [])
+        news    = data.get("news", [])
         devices = data.get("devices", [])
-        events = data.get("events", [])
-        
-        # Store devices for scene control
+        events  = data.get("events", [])
+
         self._devices = devices
         self.home_scenes.set_devices(devices)
-        
-        # Update stat cards
-        active_tasks = [t for t in tasks if not t.get('completed')]
-        self.planner_stat.set_count(len(active_tasks))
+
+        active = [t for t in tasks if not t.get('completed')]
+        self.planner_stat.set_count(len(active))
         self.news_stat.set_count(len(news))
         self.devices_stat.set_count(len(devices))
-        
-        # Update intelligence feed
+
         self.feed.update_news(news)
         self.feed.update_devices(devices)
         self.feed.update_focus(tasks)
-        
-        # Update priority card with calendar events
         self.feed.priority.update_event(events)
-    
+
     def _on_navigate(self, route_key: str):
-        """Emit navigation signal when a stat card is clicked."""
         self.navigate_to.emit(route_key)

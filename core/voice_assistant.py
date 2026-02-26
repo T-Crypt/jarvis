@@ -21,22 +21,8 @@ from core.function_executor import executor as function_executor
 # ── Functions that are direct actions (execute → Qwen confirms) ─────────────
 ACTION_FUNCTIONS = {
     "control_light", "set_timer", "set_alarm",
-    "create_calendar_event", "add_task", "web_search"
-}
-
-# ── RGB functions — all route through function_executor then Qwen confirms ───
-# BUG FIX: these were missing entirely, causing every RGB voice command to
-# fall into the else-branch and be treated as plain chat (signalrgb never called).
-RGB_FUNCTIONS = {
-    "control_rgb_lighting",          # high-level dispatcher
-    "check_signalrgb_connection",    # no args
-    "get_current_rgb_effect",        # no args
-    "set_rgb_brightness",            # brightness: int
-    "enable_rgb_canvas",             # enabled: bool
-    "get_installed_rgb_effects",     # no args
-    "get_rgb_effect_info",           # effect_id: str
-    "apply_rgb_effect",              # effect_id: str
-    "get_rgb_effect_presets",        # effect_id: str
+    "create_calendar_event", "add_task", "web_search",
+    "control_rgb_lighting",   # PowerShell URL scheme — no API needed
 }
 
 
@@ -186,15 +172,6 @@ class VoiceAssistant(QObject):
 
                 self._generate_response_with_context(func_name, result, user_text)
 
-            elif func_name in RGB_FUNCTIONS:
-                # ── RGB lighting functions ───────────────────────────────────
-                # Route to function_executor which calls signalrgb.py methods.
-                # Then pass the result to Qwen so it can give a spoken confirmation.
-                print(f"{CYAN}[VoiceAssistant] Executing RGB function: {func_name}{RESET}")
-                result = function_executor.execute(func_name, params)
-                print(f"{CYAN}[VoiceAssistant] RGB result: {result}{RESET}")
-                self._generate_response_with_context(func_name, result, user_text)
-
             elif func_name == "get_system_info":
                 # ── System state query ───────────────────────────────────────
                 result = function_executor.execute(func_name, params)
@@ -257,36 +234,13 @@ class VoiceAssistant(QObject):
                     context_parts.append(f"Top news: {', '.join(titles)}")
                 context_msg = "SYSTEM CONTEXT:\n" + "\n".join(context_parts) if context_parts else "No system information available."
 
-            elif func_name in RGB_FUNCTIONS:
-                # Give Qwen specific context so it can give a natural spoken confirmation
+            elif func_name == "control_rgb_lighting":
                 data = result.get("data", {})
                 if success:
-                    if func_name == "apply_rgb_effect":
-                        effect = params_from_result(data, "effect_id", "the effect")
-                        context_msg = f"RGB lighting: successfully applied effect '{effect}'."
-                    elif func_name == "set_rgb_brightness":
-                        brightness = params_from_result(data, "brightness", "the requested level")
-                        context_msg = f"RGB lighting: brightness set to {brightness}%."
-                    elif func_name == "enable_rgb_canvas":
-                        state = "enabled" if data.get("enabled", True) else "disabled"
-                        context_msg = f"RGB lighting canvas has been {state}."
-                    elif func_name == "control_rgb_lighting":
-                        context_msg = f"RGB lighting control executed successfully. {message}"
-                    elif func_name == "check_signalrgb_connection":
-                        context_msg = "SignalRGB is connected and available."
-                    elif func_name == "get_current_rgb_effect":
-                        effect_name = data.get("effect_name") or data.get("name") or "unknown"
-                        context_msg = f"The current RGB lighting effect is: {effect_name}."
-                    elif func_name == "get_installed_rgb_effects":
-                        effects = data.get("effects", [])
-                        names = [e.get("name", e.get("id", "?")) for e in effects[:5]]
-                        context_msg = f"Installed RGB effects include: {', '.join(names)}." if names else "No effects found."
-                    elif func_name in ("get_rgb_effect_info", "get_rgb_effect_presets"):
-                        context_msg = f"RGB effect info retrieved. {message}"
-                    else:
-                        context_msg = f"RGB function {func_name} completed. {message}"
+                    effect = data.get("effect_name", "the effect")
+                    context_msg = f"RGB lighting changed to {effect}."
                 else:
-                    context_msg = f"RGB lighting command failed. {message}"
+                    context_msg = f"RGB lighting change failed. {message}"
             else:
                 context_msg = f"Function {func_name} executed. Success: {success}. Result: {message}"
 

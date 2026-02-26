@@ -157,91 +157,17 @@ def nonthinking(prompt: str) -> str:
     return "result"
 
 
-# ── RGB high-level control ────────────────────────────────────────────────────
+# ── RGB control ──────────────────────────────────────────────────────────────
 
-def control_rgb_lighting(action: str, brightness: int = None, effect_name: str = None) -> str:
+def control_rgb_lighting(effect_name: str) -> str:
     """
-    Control PC RGB lighting via SignalRGB - set brightness, enable/disable
-    canvas, or apply effects.
+    Change the PC RGB lighting effect via SignalRGB.
+    Available effects: Sakura, Hydrogen, Black Ice, Spiral Rainbow, Coral,
+    Neon Fire, Emerald Dream, Rainbow Rise, Spin, Enigma, Corrosive,
+    Pixel Fill, Cyber Rain, Fire And Ice
 
     Args:
-        action: Action to perform: set_brightness, enable_canvas,
-                disable_canvas, apply_effect
-        brightness: Brightness level 0-100 (used with set_brightness action)
-        effect_name: Name of the effect to apply (used with apply_effect action)
-    """
-    return "result"
-
-
-# ── RGB low-level API tools ───────────────────────────────────────────────────
-
-def check_signalrgb_connection() -> str:
-    """
-    Check if SignalRGB API is available for RGB lighting control.
-    """
-    return "result"
-
-
-def get_current_rgb_effect() -> str:
-    """
-    Get the currently active RGB lighting effect from SignalRGB.
-    """
-    return "result"
-
-
-def set_rgb_brightness(brightness: int) -> str:
-    """
-    Set the global RGB lighting brightness level via SignalRGB API.
-
-    Args:
-        brightness: Brightness level 0-100
-    """
-    return "result"
-
-
-def enable_rgb_canvas(enabled: bool) -> str:
-    """
-    Enable or disable the RGB lighting canvas in SignalRGB.
-
-    Args:
-        enabled: True to enable the canvas, False to disable it
-    """
-    return "result"
-
-
-def get_installed_rgb_effects() -> str:
-    """
-    Get the list of all installed RGB lighting effects from SignalRGB.
-    """
-    return "result"
-
-
-def get_rgb_effect_info(effect_id: str) -> str:
-    """
-    Get detailed information about a specific RGB lighting effect.
-
-    Args:
-        effect_id: The ID of the effect to query
-    """
-    return "result"
-
-
-def apply_rgb_effect(effect_id: str) -> str:
-    """
-    Apply a specific RGB lighting effect by ID via SignalRGB.
-
-    Args:
-        effect_id: The ID of the effect to apply
-    """
-    return "result"
-
-
-def get_rgb_effect_presets(effect_id: str) -> str:
-    """
-    Get available presets for a specific RGB lighting effect.
-
-    Args:
-        effect_id: The ID of the effect to get presets for
+        effect_name: Name of the effect to apply
     """
     return "result"
 
@@ -262,38 +188,17 @@ TOOLS = [
     get_json_schema(nonthinking),
     # RGB
     get_json_schema(control_rgb_lighting),
-    get_json_schema(check_signalrgb_connection),
-    get_json_schema(get_current_rgb_effect),
-    get_json_schema(set_rgb_brightness),
-    get_json_schema(enable_rgb_canvas),
-    get_json_schema(get_installed_rgb_effects),
-    get_json_schema(get_rgb_effect_info),
-    get_json_schema(apply_rgb_effect),
-    get_json_schema(get_rgb_effect_presets),
 ]
 
 SYSTEM_MSG = "You are a model that can do function calling with the following functions"
 
-# BUG FIX: was missing all 9 RGB functions — they were never recognized,
-# causing _parse_function_call to always fall through to "nonthinking".
 VALID_FUNCTIONS = {
-    # Core
     "control_light", "set_timer", "set_alarm", "create_calendar_event",
     "add_task", "web_search", "get_system_info", "thinking", "nonthinking",
-    # RGB
     "control_rgb_lighting",
-    "check_signalrgb_connection", "get_current_rgb_effect",
-    "set_rgb_brightness", "enable_rgb_canvas", "get_installed_rgb_effects",
-    "get_rgb_effect_info", "apply_rgb_effect", "get_rgb_effect_presets",
 }
 
-# Functions that take no arguments
-NO_ARG_FUNCTIONS = {
-    "get_system_info",
-    "check_signalrgb_connection",
-    "get_current_rgb_effect",
-    "get_installed_rgb_effects",
-}
+NO_ARG_FUNCTIONS = {"get_system_info"}
 
 
 def ensure_model_available(model_path: str = LOCAL_ROUTER_PATH) -> str:
@@ -461,17 +366,9 @@ class FunctionGemmaRouter:
         elif func_name == "web_search":
             return {"query": user_prompt}
 
-        # RGB high-level
+        # RGB
         elif func_name == "control_rgb_lighting":
-            return {"action": "apply_effect", "effect_name": user_prompt}
-
-        # RGB low-level — single required arg functions
-        elif func_name == "set_rgb_brightness":
-            return {"brightness": 75}   # safe default
-        elif func_name == "enable_rgb_canvas":
-            return {"enabled": True}    # safe default: turn on
-        elif func_name in ("get_rgb_effect_info", "apply_rgb_effect", "get_rgb_effect_presets"):
-            return {"effect_id": user_prompt}
+            return {"effect_name": user_prompt}
 
         return {}
 
@@ -498,19 +395,12 @@ if __name__ == "__main__":
         # Passthrough
         ("Explain quantum computing", "thinking"),
         ("Hello there!", "nonthinking"),
-        # RGB high-level
-        ("Set RGB brightness to 75", "control_rgb_lighting"),
-        ("Apply Rainbow effect", "control_rgb_lighting"),
-        ("Enable RGB canvas", "control_rgb_lighting"),
-        # RGB low-level
-        ("Is SignalRGB connected?", "check_signalrgb_connection"),
-        ("What RGB effect is active?", "get_current_rgb_effect"),
-        ("Set RGB brightness to 50", "set_rgb_brightness"),
-        ("Turn off the RGB canvas", "enable_rgb_canvas"),
-        ("List installed RGB effects", "get_installed_rgb_effects"),
-        ("Tell me about the Breathing effect", "get_rgb_effect_info"),
-        ("Load the Aurora effect", "apply_rgb_effect"),
-        ("Show presets for Rainbow", "get_rgb_effect_presets"),
+        # RGB
+        ("Set my RGB to Cyber Rain", "control_rgb_lighting"),
+        ("Change RGB to Spiral Rainbow", "control_rgb_lighting"),
+        ("Apply Neon Fire effect", "control_rgb_lighting"),
+        ("Switch to Corrosive lighting", "control_rgb_lighting"),
+        ("Set my RGB to Spin", "control_rgb_lighting"),
     ]
 
     print("\n" + "="*70)

@@ -19,7 +19,7 @@ from core.voice_assistant import voice_assistant
 from core.tts import tts
 from config import VOICE_ASSISTANT_ENABLED, GREEN, RESET
 
-from gui.styles import AURA_STYLESHEET 
+from gui.styles import JARVIS_STYLESHEET as AURA_STYLESHEET
 
 from gui.tabs.dashboard import DashboardView
 from gui.tabs.chat import ChatTab

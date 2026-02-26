@@ -1,182 +1,42 @@
 """
-Train FunctionGemma for function calling with 18 tools
-Auto HuggingFace authentication + safe overwrite behavior
-"""
+Train FunctionGemma for function calling — 10 tools.
 
-import os
-import shutil
-import getpass
-import json
-from pathlib import Path
-from collections import Counter
+Core (9):  control_light, set_timer, set_alarm, create_calendar_event,
+           add_task, web_search, get_system_info, thinking, nonthinking
+RGB  (1):  control_rgb_lighting  (effect name only, PowerShell URL scheme)
+"""
 
 import torch
 from datasets import load_dataset
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from transformers.utils import get_json_schema
-from huggingface_hub import login, get_token
 from trl import SFTTrainer, SFTConfig
 from peft import LoraConfig, PeftModel
+from collections import Counter
 
-os.environ["TENSORBOARD_LOGGING_DIR"] = "runs"
-
-# ============================================================
-# CONFIG
-# ============================================================
-
-MODEL_ID = "google/functiongemma-270m-it"
+MODEL_ID   = "google/functiongemma-270m-it"
 OUTPUT_DIR = "functiongemma-270m-ft"
-MERGED_OUTPUT_DIR = "merged_model"
-DATA_FILE = "training_dataset_functions.jsonl"
-
-SYSTEM_MSG = "You are a model that can do function calling."
-
-# ============================================================
-# HUGGINGFACE AUTHENTICATION
-# ============================================================
+MERGED_DIR = "merged_model"
+DATA_FILE  = "training_dataset_functions.jsonl"
+MAX_LENGTH = 768
+EPOCHS     = 8
 
 
-def ensure_hf_login():
+# ---------------------------------------------------------------------------
+# Tool stubs — docstrings drive get_json_schema(). Keep in sync with
+# generate_training_data.py and router.py or training will be misaligned.
+# ---------------------------------------------------------------------------
+
+def control_light(action: str, device_name: str = None,
+                  brightness: int = None, color: str = None) -> str:
     """
-    Ensure the environment has a Hugging Face token; if not, prompt the user.
-
-    Uses:
-        get_token - returns token if already saved in the environment.
-
-    Raises:
-        RuntimeError: If no token is provided interactively.
-    """
-    token = get_token()
-    if token:
-        print("✓ Hugging Face token already present")
-        return
-
-    print("\nHugging Face login required.")
-    token = getpass.getpass("Enter Hugging Face token: ").strip()
-
-    if not token:
-        raise RuntimeError("No token provided")
-
-    login(token=token, add_to_git_credential=True)
-    print("✓ Login successful")
-
-
-# ============================================================
-# SAFE DIRECTORY RESET
-# ============================================================
-
-
-def reset_dir(path):
-    """
-    Remove and recreate the directory at `path` to ensure it's empty.
+    Control smart lights - turn on, off, dim, or change color.
 
     Args:
-        path: Path to remove and recreate.
-
-    Returns:
-        None
-    """
-    if os.path.exists(path):
-        print(f"Removing existing directory: {path}")
-        shutil.rmtree(path)
-    os.makedirs(path, exist_ok=True)
-
-
-# ============================================================
-# GPU VRAM AUTO TUNER
-# ============================================================
-
-
-def auto_training_profile():
-    """
-    Guess a reasonable per-device batch and accumulation profile from GPU VRAM.
-
-    Returns:
-        dict: {batch: int, grad_accum: int, bf16: bool}
-    """
-    if not torch.cuda.is_available():
-        return dict(batch=1, grad_accum=4, bf16=False)
-
-    try:
-        vram = torch.cuda.get_device_properties(0).total_memory / 1e9
-    except Exception:
-        # fallback if device properties not available
-        vram = 12.0
-    print(f"Detected VRAM: {vram:.1f} GB")
-
-    if vram >= 20:
-        return dict(batch=4, grad_accum=1, bf16=True)
-    if vram >= 12:
-        return dict(batch=2, grad_accum=2, bf16=True)
-    if vram >= 8:
-        return dict(batch=1, grad_accum=4, bf16=True)
-    return dict(batch=1, grad_accum=8, bf16=False)
-
-
-# ============================================================
-# DATASET SCHEMA VALIDATION
-# ============================================================
-
-
-def validate_sample(sample):
-    """
-    Validate JSONL sample structure:
-      - must contain "messages" list
-      - must contain at least one user and one assistant message
-      - assistant message must include tool_calls with a function name that is valid
-
-    Args:
-        sample: single dataset example (a dict)
-
-    Returns:
-        bool: True if valid, False otherwise
-    """
-    try:
-        msgs = sample["messages"]
-        assert isinstance(msgs, list)
-        user_found = False
-        assistant_found = False
-        for m in msgs:
-            if m["role"] == "user":
-                user_found = True
-            if m["role"] == "assistant":
-                assistant_found = True
-                if "tool_calls" not in m:
-                    return False
-                tc = m["tool_calls"]
-                if not isinstance(tc, list) or len(tc) == 0:
-                    return False
-                fn = tc[0]["function"]["name"]
-                if fn not in VALID_FUNCTIONS:
-                    print(f"Invalid function skipped: {fn}")
-                    return False
-        return user_found and assistant_found
-    except Exception as e:
-        # If anything goes wrong while validating, mark sample invalid
-        # Print minimal message for debugging
-        # (Don't raise to allow dataset.filter to continue)
-        print("Dataset validation error:", e)
-        return False
-
-
-# ============================================================
-# TOOL STUBS (with docstrings)
-# Each function must have full `Args:` and `Returns:` sections so
-# transformers.utils.get_json_schema can parse them.
-# ============================================================
-
-def control_light(action: str, device_name: str = None, brightness: int = None, color: str = None) -> str:
-    """
-    Control a smart light device.
-
-    Args:
-        action: Action to perform (on, off, toggle, dim).
-        device_name: Name of the device or room.
-        brightness: Brightness level (0-100).
-        color: Color name or hex code.
-
-    Returns:
-        Status string describing the result.
+        action: Action to perform: on, off, dim, toggle
+        device_name: Name of the light or room
+        brightness: Brightness level 0-100
+        color: Color name or hex code
     """
     return "result"
 
@@ -186,41 +46,33 @@ def set_timer(duration: str, label: str = None) -> str:
     Set a countdown timer.
 
     Args:
-        duration: Duration string, e.g., '5 minutes'.
-        label: Optional label for the timer.
-
-    Returns:
-        Status string confirming the timer creation.
+        duration: Duration like '5 minutes' or '1 hour'
+        label: Optional label for the timer
     """
     return "result"
 
 
 def set_alarm(time: str, label: str = None) -> str:
     """
-    Set an alarm.
+    Set an alarm for a specific time.
 
     Args:
-        time: Time string, e.g., '07:00' or '7am'.
-        label: Optional label for the alarm.
-
-    Returns:
-        Status string confirming the alarm creation.
+        time: Time for alarm like '7am' or '14:30'
+        label: Optional label
     """
     return "result"
 
 
-def create_calendar_event(title: str, date: str = None, time: str = None, duration: int = None) -> str:
+def create_calendar_event(title: str, date: str = None,
+                          time: str = None, duration: int = None) -> str:
     """
     Create a calendar event.
 
     Args:
-        title: Event title.
-        date: Event date string, e.g., '2026-05-01'.
-        time: Event time string, e.g., '14:00'.
-        duration: Duration in minutes.
-
-    Returns:
-        Status string confirming the event creation.
+        title: Event title
+        date: Date like 'tomorrow' or '2024-01-15'
+        time: Time like '3pm'
+        duration: Duration in minutes
     """
     return "result"
 
@@ -230,425 +82,249 @@ def add_task(text: str, priority: str = None) -> str:
     Add a task to the to-do list.
 
     Args:
-        text: Task description.
-        priority: Optional priority label (low, medium, high).
-
-    Returns:
-        Status string confirming the task addition.
+        text: Task description
+        priority: Priority level
     """
     return "result"
 
 
 def web_search(query: str) -> str:
     """
-    Perform a web search.
+    Search the web for information.
 
     Args:
-        query: Search query text.
-
-    Returns:
-        Search results string or summary.
+        query: Search query
     """
     return "result"
 
 
 def get_system_info() -> str:
     """
-    Return system info: timers, calendar events, tasks, devices.
-
-    Returns:
-        JSON-like status string describing current system state.
+    Get current system state including timers, calendar, tasks, devices,
+    and weather.
     """
     return "result"
 
 
 def thinking(prompt: str) -> str:
     """
-    Multi-step reasoning function.
+    Use for complex queries requiring multi-step reasoning, math, coding,
+    debugging, detailed analysis, or long-form writing.
 
     Args:
-        prompt: User prompt for multi-step reasoning.
-
-    Returns:
-        Computed result string (long-form reasoning).
+        prompt: The user's original prompt
     """
     return "result"
 
 
 def nonthinking(prompt: str) -> str:
     """
-    Simple, single-step responses.
+    Use for simple queries: greetings, single-fact questions, short
+    acknowledgements, or any request not requiring deep reasoning.
 
     Args:
-        prompt: User prompt.
-
-    Returns:
-        Short result string.
+        prompt: The user's original prompt
     """
     return "result"
 
 
-# ── RGB HIGH-LEVEL CONTROL ──
-
-def control_rgb_lighting(action: str, brightness: int = None, effect_name: str = None) -> str:
+def control_rgb_lighting(effect_name: str) -> str:
     """
-    Control PC RGB lighting via SignalRGB.
+    Change the PC RGB lighting effect via SignalRGB.
+    Available effects: Sakura, Hydrogen, Black Ice, Spiral Rainbow, Coral,
+    Neon Fire, Emerald Dream, Rainbow Rise, Spin, Enigma, Corrosive,
+    Pixel Fill, Cyber Rain, Fire And Ice
 
     Args:
-        action: One of 'set_brightness', 'enable_canvas', 'disable_canvas', 'apply_effect'.
-        brightness: Brightness level (0-100), used when action is 'set_brightness'.
-        effect_name: Name of effect to apply when action is 'apply_effect'.
-
-    Returns:
-        Status string confirming the action.
+        effect_name: Name of the RGB effect to apply
     """
     return "result"
 
 
-# ── RGB LOW-LEVEL API ──
-
-def check_signalrgb_connection() -> str:
-    """
-    Check if SignalRGB API is available.
-
-    Returns:
-        Status string indicating connectivity (e.g., 'connected' or 'unavailable').
-    """
-    return "result"
-
-
-def get_current_rgb_effect() -> str:
-    """
-    Return currently active RGB effect.
-
-    Returns:
-        The ID or name of the currently active RGB effect.
-    """
-    return "result"
-
-
-def set_rgb_brightness(brightness: int) -> str:
-    """
-    Set global RGB brightness 0-100.
-
-    Args:
-        brightness: Brightness level (0-100).
-
-    Returns:
-        Status string confirming the brightness change.
-    """
-    return "result"
-
-
-def enable_rgb_canvas(enabled: bool) -> str:
-    """
-    Enable or disable the RGB canvas.
-
-    Args:
-        enabled: True to enable the canvas, False to disable it.
-
-    Returns:
-        Status string indicating new canvas state.
-    """
-    return "result"
-
-
-def get_installed_rgb_effects() -> str:
-    """
-    Get all installed RGB effects.
-
-    Returns:
-        A list (stringified) of installed RGB effect names/IDs.
-    """
-    return "result"
-
-
-def get_rgb_effect_info(effect_id: str) -> str:
-    """
-    Get details for a specific RGB effect.
-
-    Args:
-        effect_id: ID or name of the RGB effect.
-
-    Returns:
-        Detailed info about the effect (string or JSON).
-    """
-    return "result"
-
-
-def apply_rgb_effect(effect_id: str) -> str:
-    """
-    Apply a specific RGB effect by ID.
-
-    Args:
-        effect_id: ID or name of the RGB effect.
-
-    Returns:
-        Status string confirming the effect application.
-    """
-    return "result"
-
-
-def get_rgb_effect_presets(effect_id: str) -> str:
-    """
-    Get presets for a specific RGB effect.
-
-    Args:
-        effect_id: ID or name of the RGB effect.
-
-    Returns:
-        List (string) of presets available for that effect.
-    """
-    return "result"
-
-
-# ============================================================
-# GENERATE SCHEMAS
-# ============================================================
-
-# Build TOOLS list by generating JSON schema entries for each function.
-TOOLS = []
-_function_list = [
-    control_light, set_timer, set_alarm, create_calendar_event, add_task, web_search,
-    get_system_info, thinking, nonthinking, control_rgb_lighting,
-    check_signalrgb_connection, get_current_rgb_effect, set_rgb_brightness,
-    enable_rgb_canvas, get_installed_rgb_effects, get_rgb_effect_info,
-    apply_rgb_effect, get_rgb_effect_presets
+# ---------------------------------------------------------------------------
+# Build tool schema list — order must match generate_training_data.py TOOLS
+# ---------------------------------------------------------------------------
+TOOLS = [
+    get_json_schema(control_light),
+    get_json_schema(set_timer),
+    get_json_schema(set_alarm),
+    get_json_schema(create_calendar_event),
+    get_json_schema(add_task),
+    get_json_schema(web_search),
+    get_json_schema(get_system_info),
+    get_json_schema(thinking),
+    get_json_schema(nonthinking),
+    get_json_schema(control_rgb_lighting),
 ]
 
-# Wrap schema generation with a helpful error message if any function's docstring is malformed.
-for fn in _function_list:
-    try:
-        schema = get_json_schema(fn)
-        TOOLS.append(schema)
-    except Exception as e:
-        # Re-raise with more context to help debugging docstring problems
-        raise RuntimeError(f"Error generating JSON schema for function '{fn.__name__}': {e}") from e
-
-# Set of valid function names for dataset validation and rebuild step
-VALID_FUNCTIONS = {s["function"]["name"] for s in TOOLS}
+VALID_FUNCTIONS = {schema["function"]["name"] for schema in TOOLS}
+SYSTEM_MSG = "You are a model that can do function calling with the following functions"
 
 
-# ============================================================
-# DATASET REBUILD
-# ============================================================
+# ---------------------------------------------------------------------------
+# Dataset preprocessing
+# ---------------------------------------------------------------------------
 
-
-def rebuild(sample):
+def rebuild_sample(sample):
     """
-    Convert original conversation sample into canonical training structure.
-    Keeps developer/system, user, assistant(function_call) roles and attaches tool schemas.
-
-    Args:
-        sample: original dict with "messages" list.
-
-    Returns:
-        dict: {"messages": [...], "tools": TOOLS}
+    Replace the stored tools list with the authoritative TOOLS schemas so every
+    training example sees the exact same tool context as at inference time.
     """
-    user = None
-    tool = None
-    args = {}
-    for m in sample["messages"]:
-        if m["role"] == "user":
-            user = m.get("content", "")
-        if m["role"] == "assistant" and "tool_calls" in m:
-            tc = m["tool_calls"][0]["function"]
-            tool = tc["name"]
-            args = tc.get("arguments", {})
-    if not user or tool not in VALID_FUNCTIONS:
-        # return original sample unchanged if can't rebuild
+    messages = sample.get("messages", [])
+    user_content = tool_name = tool_args = None
+
+    for msg in messages:
+        if msg["role"] == "user":
+            user_content = msg["content"]
+        elif msg["role"] == "assistant" and msg.get("tool_calls"):
+            fn = msg["tool_calls"][0]["function"]
+            tool_name = fn["name"]
+            tool_args = fn.get("arguments", {})
+
+    if not user_content or not tool_name:
         return sample
+
+    if tool_name not in VALID_FUNCTIONS:
+        print(f"  ⚠  Skipping unknown function: '{tool_name}'")
+        return sample
+
     return {
         "messages": [
             {"role": "developer", "content": SYSTEM_MSG},
-            {"role": "user", "content": user},
+            {"role": "user",      "content": user_content},
             {"role": "assistant", "tool_calls": [
-                {"type": "function", "function": {"name": tool, "arguments": args}}
-            ]}
+                {"type": "function", "function": {
+                    "name": tool_name, "arguments": tool_args
+                }}
+            ]},
         ],
-        "tools": TOOLS
+        "tools": TOOLS,
     }
 
 
-# ============================================================
-# PROMPT / TOKENIZATION HELPERS
-# ============================================================
-
-
-def render_messages_to_text(messages):
-    """
-    Convert a list of role/content dicts into a single training text string.
-
-    Args:
-        messages: list of {"role": str, "content": str} or assistant function call dict.
-
-    Returns:
-        str: Combined prompt/response text for causal LM training.
-    """
-    out = []
-    for m in messages:
-        role = m.get("role", "")
-        if role == "assistant" and "tool_calls" in m:
-            tc = m["tool_calls"][0]["function"]
-            fn_name = tc.get("name")
-            fn_args = tc.get("arguments", {})
-            # function call serialized as JSON so model sees function name + args
-            out.append(f"<assistant_function_call name={fn_name} args={json.dumps(fn_args, ensure_ascii=False)} />")
-        else:
-            content = m.get("content", "")
-            out.append(f"<{role}>{content}</{role}>")
-    # join segments with newlines - keep small, consistent separators
-    return "\n".join(out)
-
-
-def tokenize_and_build_labels(example, tokenizer, max_length=1024):
-    """
-    Convert a rebuilt example into tokenized input_ids and labels.
-
-    Args:
-        example: dict as returned from rebuild()
-        tokenizer: AutoTokenizer instance
-        max_length: max token length
-
-    Returns:
-        dict with input_ids, attention_mask, labels
-    """
-    text = render_messages_to_text(example["messages"])
-    # Tokenize; return PyTorch-style input ids
-    tok = tokenizer(text, truncation=True, max_length=max_length, padding=False)
-    input_ids = tok["input_ids"]
-    # For causal LM fine-tuning we set labels = input_ids
-    return {"input_ids": input_ids, "attention_mask": tok.get("attention_mask", [1] * len(input_ids)), "labels": input_ids}
-
-
-# ============================================================
-# TRAINING FUNCTION
-# ============================================================
-
+# ---------------------------------------------------------------------------
+# Main training routine
+# ---------------------------------------------------------------------------
 
 def train():
-    # HuggingFace login
-    ensure_hf_login()
+    print("=" * 60)
+    print(f"Model  : {MODEL_ID}")
+    print(f"Data   : {DATA_FILE}")
+    print(f"Tools  : {len(TOOLS)}")
+    print("=" * 60)
 
-    # Auto VRAM profile
-    profile = auto_training_profile()
-    print(f"Auto training profile: {profile}")
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
 
-    # Overwrite directories
-    reset_dir(OUTPUT_DIR)
-    reset_dir(MERGED_OUTPUT_DIR)
-
-    # Load tokenizer
-    print("Loading tokenizer...")
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, use_fast=True)
-
-    # Load dataset
-    print("Loading dataset...")
+    # Load & inspect
+    print(f"\nLoading dataset from {DATA_FILE}...")
     raw = load_dataset("json", data_files=DATA_FILE, split="train")
-    dataset = raw.filter(validate_sample)
-    dataset = dataset.map(rebuild, remove_columns=raw.column_names)
-    print(f"Rebuilt dataset size: {len(dataset)}")
+    print(f"Raw examples: {len(raw)}")
 
-    # ==============================
-    # Tokenize dataset
-    # ==============================
-    def tokenize_sample(sample):
-        # Encode user + assistant messages
-        content = ""
-        for msg in sample["messages"]:
-            role = msg["role"]
-            if role == "developer":  # SYSTEM_MSG
-                continue
-            if role == "user":
-                content += f"<|user|> {msg['content']}\n"
-            elif role == "assistant" and "tool_calls" in msg:
-                fn = msg["tool_calls"][0]["function"]["name"]
-                args = msg["tool_calls"][0]["function"].get("arguments", {})
-                content += f"<|assistant|> Call {fn} with {args}\n"
-            else:
-                content += f"<|assistant|> {msg.get('content','')}\n"
-        return tokenizer(content, truncation=True, max_length=1024)
+    counts = Counter(
+        s["messages"][2]["tool_calls"][0]["function"]["name"]
+        for s in raw
+        if len(s.get("messages", [])) > 2 and s["messages"][2].get("tool_calls")
+    )
+    print("\nFunction distribution:")
+    unknown = []
+    for fn, n in sorted(counts.items()):
+        mark = "✓" if fn in VALID_FUNCTIONS else "❌"
+        print(f"  {mark}  {fn:<40} {n:>4}")
+        if fn not in VALID_FUNCTIONS:
+            unknown.append(fn)
+    if unknown:
+        print(f"\n  ⚠  Unknown functions will be skipped: {unknown}")
+        print("     Regenerate dataset with: python generate_training_data.py")
 
-    print("Tokenizing dataset...")
-    tokenized = dataset.map(tokenize_sample)
-    print(f"Tokenized dataset size: {len(tokenized)}")
+    # Rebuild with authoritative schemas
+    print("\nRebuilding with current tool schemas...")
+    dataset = raw.map(rebuild_sample, remove_columns=raw.column_names)
+    print(f"Final examples: {len(dataset)}")
 
-    # Convert to arrow with input_ids, attention_mask, labels
-    print("Final dataset size:", len(tokenized))
-
-    # Safe dtype selection for bf16
-    if profile["bf16"] and torch.cuda.is_available():
-        try:
-            torch_dtype = torch.bfloat16
-        except Exception:
-            torch_dtype = torch.float32
-    else:
-        torch_dtype = torch.float32
+    # Token length check
+    sample_text = tokenizer.apply_chat_template(
+        dataset[0]["messages"],
+        tools=dataset[0]["tools"],
+        add_generation_prompt=False,
+        tokenize=False
+    )
+    n_tok = len(tokenizer.encode(sample_text))
+    print(f"Sample[0] token length: {n_tok}  (max_length={MAX_LENGTH})")
+    if n_tok > MAX_LENGTH:
+        print("  ⚠  Sample exceeds max_length — some examples will be truncated")
 
     # Load model
-    print("Loading model...")
+    print("\nLoading base model...")
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_ID,
-        dtype=torch.bfloat16 if profile["bf16"] else torch.float32,
-        device_map="auto"
+        torch_dtype=torch.bfloat16,
+        device_map="auto",
+        attn_implementation="eager",
     )
+    print(f"Device: {model.device}  |  DType: {model.dtype}")
 
-    # LoRA config
-    peft = LoraConfig(
+    peft_config = LoraConfig(
         r=16,
         lora_alpha=32,
         lora_dropout=0.05,
-        target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
-        task_type="CAUSAL_LM"
+        target_modules=[
+            "q_proj", "k_proj", "v_proj", "o_proj",
+            "gate_proj", "up_proj", "down_proj",
+        ],
+        task_type="CAUSAL_LM",
     )
 
-    args = SFTConfig(
+    sft_args = SFTConfig(
         output_dir=OUTPUT_DIR,
-        max_length=1024,
-        num_train_epochs=8,
-        per_device_train_batch_size=profile["batch"],
-        gradient_accumulation_steps=profile["grad_accum"],
+        max_length=MAX_LENGTH,
+        packing=False,
+        num_train_epochs=EPOCHS,
+        per_device_train_batch_size=1,
+        gradient_accumulation_steps=4,
         gradient_checkpointing=True,
-        bf16=profile["bf16"],
-        learning_rate=2e-5,
+        optim="adamw_torch_fused",
+        logging_steps=10,
         save_strategy="epoch",
-        report_to="tensorboard",
-        packing=False
+        learning_rate=2e-5,
+        bf16=True,
+        lr_scheduler_type="constant",
+        overwrite_output_dir=True,
     )
 
-    # Trainer
     trainer = SFTTrainer(
         model=model,
-        args=args,
-        train_dataset=tokenized,
-        peft_config=peft,
+        args=sft_args,
+        train_dataset=dataset,
+        peft_config=peft_config,
+        processing_class=tokenizer,
     )
 
-    print("\n=== TRAINING START ===")
+    print(f"\nTraining {len(dataset)} examples × {EPOCHS} epochs...")
+    print("=" * 60)
     trainer.train()
+
+    print("\nSaving LoRA adapter...")
     trainer.save_model(OUTPUT_DIR)
 
-    del trainer
-    del model
+    del model, trainer
     torch.cuda.empty_cache()
 
-    # ====================================================
-    # MERGE
-    # ====================================================
-    print("\nMerging LoRA adapter...")
-
+    print("\nMerging adapter into base model...")
     base = AutoModelForCausalLM.from_pretrained(
-        MODEL_ID,
-        torch_dtype=torch_dtype,
-        device_map="auto"
+        MODEL_ID, torch_dtype=torch.bfloat16, device_map="auto",
     )
-    merged = PeftModel.from_pretrained(base, OUTPUT_DIR)
-    merged = merged.merge_and_unload()
-    merged.save_pretrained(MERGED_OUTPUT_DIR, safe_serialization=True)
-    tokenizer.save_pretrained(MERGED_OUTPUT_DIR)
+    merged = PeftModel.from_pretrained(base, OUTPUT_DIR).merge_and_unload()
 
-    print("\n✓ TRAINING COMPLETE")
-    print(f"Merged model overwritten at: {MERGED_OUTPUT_DIR}")
+    print(f"Saving merged model → {MERGED_DIR}/")
+    merged.save_pretrained(MERGED_DIR, safe_serialization=True)
+    tokenizer.save_pretrained(MERGED_DIR)
+
+    print("\n" + "=" * 60)
+    print("TRAINING COMPLETE")
+    print(f"  Merged model: {MERGED_DIR}/")
+    print("\nQuick route test:")
+    print('  python -c "from core.router import FunctionGemmaRouter; r=FunctionGemmaRouter(); print(r.route(\'set my rgb to cyber rain\'))"')
+    print("=" * 60)
 
 
 if __name__ == "__main__":
