@@ -105,13 +105,13 @@ ollama list
 ```bash
 # Clone the repository
 git clone https://github.com/your-username/pocket_ai.git
-cd pocket_ai
+cd jarvis
 
 # Create a conda environment
-conda create -n ada python=3.11 -y
+conda create -n jarvis python=3.11 -y
 
 # Activate the environment
-conda activate ada
+conda activate jarvis
 
 # Install dependencies
 pip install -r requirements.txt
