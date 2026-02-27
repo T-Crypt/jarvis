@@ -28,6 +28,8 @@ _MUTED  = "#8b9bb4" # Inclusive
 
 class DataFetchThread(QThread):
     devices_found = Signal(list)
+    def __init__(self, parent=None):
+        super().__init__(parent)
 
     def run(self):
         try:
@@ -45,8 +47,8 @@ class DataFetchThread(QThread):
 class ActionThread(QThread):
     finished = Signal(bool)
 
-    def __init__(self, action, ip, *args):
-        super().__init__()
+    def __init__(self, action, ip, *args, parent=None):
+        super().__init__(parent)
         self.action = action
         self.ip = ip
         self.args = tuple(a for a in args if not hasattr(a, 'turn_on'))
@@ -198,12 +200,12 @@ class DeviceCard(QFrame):
 
     def _on_toggle(self, checked):
         self._set_state(checked)
-        t = ActionThread("on" if checked else "off", self.ip)
+        t = ActionThread("on" if checked else "off", self.ip, parent=self)
         t.start()
         self._worker = t
 
     def _on_brightness(self):
-        t = ActionThread("brightness", self.ip, self.slider.value())
+        t = ActionThread("brightness", self.ip, self.slider.value(), parent=self)
         t.start()
         self._worker_b = t
 
@@ -211,7 +213,7 @@ class DeviceCard(QFrame):
         h = color.hsvHue()
         s = int(color.hsvSaturationF() * 100)
         v = int(color.valueF() * 100)
-        t = ActionThread("color", self.ip, h, s, v)
+        t = ActionThread("color", self.ip, h, s, v, parent=self)
         t.start()
         self._worker_c = t
 
@@ -389,7 +391,7 @@ class HomeAutomationTab(QWidget):
         if hasattr(self, 'loader') and self.loader and self.loader.isRunning():
             return
         self._status_badge.setText("◉  SCANNING")
-        self.loader = DataFetchThread()
+        self.loader = DataFetchThread(self)
         self.loader.devices_found.connect(self._on_devices_loaded)
         self.loader.finished.connect(self.loader.deleteLater)
         self.loader.start()

@@ -221,7 +221,7 @@ class SystemMonitor(QFrame):
         self.voice_indicator.hide()
     
     def _init_worker(self):
-        self.monitor_thread = QThread()
+        self.monitor_thread = QThread(self)
         self.worker = MonitorWorker()
         self.worker.moveToThread(self.monitor_thread)
         self.worker.stats_updated.connect(self._on_stats_updated)
@@ -288,8 +288,3 @@ class SystemMonitor(QFrame):
             color = "#00d4ff"  # Jarvis Cyan (Nominal)
             
         label.setStyleSheet(f"color: {color}; font-weight: bold; font-family: Consolas;")
-
-    def __del__(self):
-        if hasattr(self, 'monitor_thread'):
-            self.monitor_thread.quit()
-            self.monitor_thread.wait()

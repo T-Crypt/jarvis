@@ -1,7 +1,7 @@
 import json
 import requests
 import datetime
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 from config import OLLAMA_URL, RESPONDER_MODEL
 
 class NewsManager:

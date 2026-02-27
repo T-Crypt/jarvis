@@ -168,6 +168,8 @@ class GlobalUplinkWidget(QWidget):
 
 class WeatherWorker(QThread):
     finished = Signal(dict)
+    def __init__(self, parent=None):
+        super().__init__(parent)
     def run(self):
         data = weather_manager.get_weather()
         self.finished.emit(data or {})
@@ -287,7 +289,7 @@ class JARVISHeader(QWidget):
         if hasattr(self, '_wx_worker') and self._wx_worker and self._wx_worker.isRunning():
             return
             
-        self._wx_worker = WeatherWorker()
+        self._wx_worker = WeatherWorker(self)
         self._wx_worker.finished.connect(self._on_weather)
         self._wx_worker.finished.connect(self._wx_worker.deleteLater)
         self._wx_worker.start()
@@ -727,6 +729,8 @@ class IntelligenceFeed(QFrame):
 
 class DashboardLoader(QThread):
     finished = Signal(dict)
+    def __init__(self, parent=None):
+        super().__init__(parent)
 
     def run(self):
         try:

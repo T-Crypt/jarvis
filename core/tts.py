@@ -80,6 +80,8 @@ class PiperTTS:
         self.speech_queue = queue.Queue()
         self.worker_thread = None
         self.running = False
+        self.initialized = False
+        self.init_lock = threading.Lock()
         self.interrupt_event = threading.Event()
         self.piper_dir = Path.home() / ".local" / "share" / "piper"
         self.models_dir = self.piper_dir / "voices"
@@ -162,44 +164,49 @@ class PiperTTS:
     
     def initialize(self):
         """Set up Piper executable and voice model."""
-        try:
-            print(f"{CYAN}[TTS] Initializing Piper TTS (executable mode)...{RESET}")
-            
-            # Download/find piper executable
-            self.piper_exe = self._download_piper_executable()
-            if not self.piper_exe:
-                print(f"{YELLOW}[TTS] Could not set up Piper executable{RESET}")
-                self.available = False
-                return False
-            
-            # Download/find voice model
-            self.model_path = self._download_model()
-            
-            # Test the executable
+        with self.init_lock:
+            if self.initialized:
+                return True
+                
             try:
-                result = subprocess.run(
-                    [self.piper_exe, "--version"],
-                    capture_output=True,
-                    text=True,
-                    timeout=10
-                )
-                print(f"{CYAN}[TTS] Piper version: {result.stdout.strip()}{RESET}")
+                print(f"{CYAN}[TTS] Initializing Piper TTS (executable mode)...{RESET}")
+                
+                # Download/find piper executable
+                self.piper_exe = self._download_piper_executable()
+                if not self.piper_exe:
+                    print(f"{YELLOW}[TTS] Could not set up Piper executable{RESET}")
+                    self.available = False
+                    return False
+                
+                # Download/find voice model
+                self.model_path = self._download_model()
+                
+                # Test the executable
+                try:
+                    result = subprocess.run(
+                        [self.piper_exe, "--version"],
+                        capture_output=True,
+                        text=True,
+                        timeout=10
+                    )
+                    print(f"{CYAN}[TTS] Piper version: {result.stdout.strip()}{RESET}")
+                except Exception as e:
+                    print(f"{YELLOW}[TTS] Warning: Could not get Piper version: {e}{RESET}")
+                
+                # Start the worker thread
+                self.running = True
+                self.worker_thread = threading.Thread(target=self._speech_worker, daemon=True)
+                self.worker_thread.start()
+                
+                self.initialized = True
+                print(f"{GREEN}[TTS] ✓ Piper TTS ready ({self.VOICE_MODEL}){RESET}")
+                return True
+                
             except Exception as e:
-                print(f"{YELLOW}[TTS] Warning: Could not get Piper version: {e}{RESET}")
-            
-            # Start the worker thread
-            self.running = True
-            self.worker_thread = threading.Thread(target=self._speech_worker, daemon=True)
-            self.worker_thread.start()
-            
-            print(f"{GREEN}[TTS] ✓ Piper TTS ready ({self.VOICE_MODEL}){RESET}")
-            return True
-            
-        except Exception as e:
-            print(f"{YELLOW}[TTS] Failed to initialize: {e}{RESET}")
-            import traceback
-            traceback.print_exc()
-            return False
+                print(f"{YELLOW}[TTS] Failed to initialize: {e}{RESET}")
+                import traceback
+                traceback.print_exc()
+                return False
     
     def _speech_worker(self):
         """Background thread that plays queued sentences."""

@@ -16,8 +16,8 @@ class NewsLoaderThread(QThread):
     loaded = Signal(list)
     status_update = Signal(str)
     
-    def __init__(self, use_ai=True):
-        super().__init__()
+    def __init__(self, use_ai=True, parent=None):
+        super().__init__(parent)
         self.use_ai = use_ai
 
     def run(self):
@@ -126,7 +126,7 @@ class BriefingView(QWidget):
 
     def load_news(self, use_ai=True):
         # SAFETY GUARD
-        if hasattr(self, 'thread') and self.thread and self.thread.isRunning():
+        if hasattr(self, 'loader_thread') and self.loader_thread and self.loader_thread.isRunning():
             return
             
         if use_ai:
@@ -139,10 +139,11 @@ class BriefingView(QWidget):
             if item.widget():
                 item.widget().deleteLater()
             
-        self.thread = NewsLoaderThread(use_ai=use_ai)
-        self.thread.status_update.connect(self.bk_text.setText)
-        self.thread.loaded.connect(self.display_news)
-        self.thread.start()
+        self.loader_thread = NewsLoaderThread(use_ai=use_ai, parent=self)
+        self.loader_thread.status_update.connect(self.bk_text.setText)
+        self.loader_thread.loaded.connect(self.display_news)
+        self.loader_thread.finished.connect(self.loader_thread.deleteLater)
+        self.loader_thread.start()
         
     def display_news(self, news_items):
         if not news_items:

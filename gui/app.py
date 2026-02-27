@@ -35,6 +35,9 @@ from core.llm import preload_models
 
 class ModelPreloaderThread(QThread):
     """Background thread to preload models at startup."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
     def run(self):
         preload_models()
 
@@ -67,20 +70,15 @@ class MainWindow(FluentWindow):
         
         self.setStyleSheet(JARVIS_STYLESHEET)
         
-        # Initialize handlers
         self.handlers = ChatHandlers(self)
-        
-        # Add system monitor to title bar
         self._init_system_monitor()
         
-        # Initialize sub-interfaces pointers
         self.chat_tab = None
         self.planner_tab = None
         self.briefing_view = None
         self.home_tab = None
         self.media_tab = None
         
-        # Flag to prevent duplicate signal connections
         self._chat_signals_connected = False
 
         self._init_window()
@@ -91,12 +89,10 @@ class MainWindow(FluentWindow):
         
     def _preload_models(self):
         """Start the background thread to preload models."""
-        self.preloader_thread = ModelPreloaderThread()
-        self.preloader_thread.finished.connect(self.preloader_thread.deleteLater)
+        self.preloader_thread = ModelPreloaderThread(self)
         self.preloader_thread.start()
     
     def _init_voice_assistant(self):
-        """Initialize and start voice assistant if enabled."""
         print(f"[System] Initializing voice protocols (enabled={VOICE_ASSISTANT_ENABLED})...")
         if VOICE_ASSISTANT_ENABLED:
             print(f"[System] Connecting telemetry signals...")
@@ -289,6 +285,11 @@ class MainWindow(FluentWindow):
         self.set_status("INITIATING SHUTDOWN SEQUENCE...")
         if VOICE_ASSISTANT_ENABLED:
             voice_assistant.stop()
+            
+        if hasattr(self, 'preloader_thread') and self.preloader_thread.isRunning():
+            self.preloader_thread.quit()
+            self.preloader_thread.wait()
+
         unload_all_models(sync=True)
         event.accept()
 

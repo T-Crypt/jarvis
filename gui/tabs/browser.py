@@ -17,7 +17,7 @@ class BrowserTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("BrowserTab")
-        self.agent_thread = QThread()
+        self.agent_thread = QThread(self)
         self.agent = None 
         
         self._setup_ui()

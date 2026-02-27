@@ -58,6 +58,9 @@ class AudioVisualizer(QWidget):
 
 class MediaFetchThread(QThread):
     track_updated = Signal(dict)
+    def __init__(self, parent=None):
+        super().__init__(parent)
+    
     def run(self):
         try:
             loop = asyncio.new_event_loop()
@@ -74,6 +77,7 @@ class MediaTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("mediaInterface")
+        self.worker = None
         self._setup_ui()
         
         self.timer = QTimer(self)
@@ -174,13 +178,16 @@ class MediaTab(QWidget):
         main.addStretch()
 
     def _fetch_track(self):
-        # SAFETY GUARD: Prevent overlapping thread crashes!
-        if hasattr(self, 'worker') and self.worker and self.worker.isRunning():
-            return
+        if self.worker:
+            try:
+                if self.worker.isRunning():
+                    return
+            except RuntimeError:
+                self.worker = None
             
-        self.worker = MediaFetchThread()
+        self.worker = MediaFetchThread(self)
         self.worker.track_updated.connect(self._update_display)
-        self.worker.finished.connect(self.worker.deleteLater) # Clear memory properly
+        self.worker.finished.connect(self.worker.deleteLater)
         self.worker.start()
 
     def _update_display(self, data):

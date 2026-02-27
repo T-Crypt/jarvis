@@ -23,23 +23,23 @@ class ChatWorker(QObject):
     
     thought_chunk = Signal(str)
     response_chunk = Signal(str)
-    think_start = Signal(bool) 
-    think_end = Signal()
     simple_response = Signal(str)
     error = Signal(str)
     status = Signal(str)
-    done = Signal()
-    ui_update = Signal()
-    toast = Signal(str, bool) 
-    set_timer_signal = Signal(int, str) 
-    reload_alarms = Signal() 
+    toast = Signal(str, bool)
+    set_timer_signal = Signal(int, str)
+    reload_alarms = Signal()
     reload_calendar = Signal()
-    search_start = Signal(str) 
+    search_start = Signal(str)
     search_end = Signal()
+    ui_update = Signal()
+    think_start = Signal(bool)
+    think_end = Signal()
+    done = Signal()
     
     def __init__(self, user_text: str, messages: list, is_tts_enabled: bool, 
                  current_session_id: str, stop_event):
-        super().__init__()
+        super().__init__() # No parent to allow moveToThread
         self.user_text = user_text
         self.messages = messages
         self.is_tts_enabled = is_tts_enabled
